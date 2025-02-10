@@ -33,7 +33,7 @@ Running the Windows version is easier because pre-built binaries are available.
 In addition to OpenEMS, the Python module gdspy must be installed.
 
 # Automatic meshing
-Two meshing methods are available in this workflow. The default is equal mesh spacing across the entire area where GDSII elements are drawn. As an option, an automatic meshing algorithm will be used, which tries to detect edges and diagonal areas that need local refinement.
+Two meshing methods are available in this workflow. The default is equal mesh spacing across the entire area where GDSII elements are drawn. As an option, an automatic meshing algorithm will be used, which tries to detect edges and diagonal areas that need local refinement. Mesh lines that are too close (resulting in slow simulation) will be removed or merged automatically.
 
 ![plot](./doc/automatic_meshing.png)
 
