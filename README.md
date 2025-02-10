@@ -50,29 +50,29 @@ This model simulates a simple thru line, with via ports on both ends. Excitation
 
 ![plot](./doc/run_line_viaport.png)
 
-Note that the Metal1 ground plane is modelledand meshed explicitely. It is not recommended to use the bottom PEC boundary for this, because that is a lossless boundary and the Metal5 resistance would not show up in results.
+Note that the Metal1 ground plane is modelled and meshed explicitely. It is not recommended to use the bottom PEC boundary for this, because that is a lossless boundary and the Metal1 resistance would not show up in results. Also note that port size will lead to parasitic inductance, port de-embedding is not implemented so far.
 
 ## run_line_GSG
-This model simulates a thru line with GSG pads on both ends. To properly simulate this, we use a composite port from two in-plane openEMS ports, one to each side ground pad. To drive the center conductor in-phase between these two ports, one is defined with opposite polarity. Both ports are in parallel, so each of then is defined with 2x the normal impedance.
+This model simulates a thru line with GSG pads on both ends. To properly simulate this, we use a composite port from two in-plane openEMS ports, one to each side from signal line to the ground pad. To drive the center conductor in-phase between these two ports, one is defined with opposite polarity. Both ports are in parallel, so each of then is defined with 2x the normal impedance.
 
 ![plot](./doc/run_line_gsg.png)
 
-The resulting S-parameters for each GSG port are calculated in the evaluation code section, combining the data from the "sub-ports" into one effective GSG result.
+The resulting S-parameters for each GSG port are calculated in the evaluation code section, combining the data from the "sub-ports" into one effective GSG port result on each end of the line.
 
 ## run_line_GSG_complex
 Much like the previous GSG example, but with a more complex real world layout. In the model code, layout pre-processing is enable to properly handle the cutouts in polygons. Without that pre-processing, openEMS polygons would not create the proper shape, due to self-intersecting polygons.
 
-![plot](./doc/run_line_GSG_complex.png)
+![plot](./doc/run_line_gsg_complex.png)
 
 ## run_inductor_diffport
-This model simulates an octagon inductor. There is only one differential port, placed between the inductor terminals. Results are valid for differential model of operation, and the code plots differential L and Q as well as numerical value for series L and series R at one extraction frequency. That extraction frequency is defined in the evaluation code section.
+This model simulates an octagon inductor. There is only one in-plane port, placed between the inductor terminals. Results are valid for differential model of operation, and the code plots differential L and Q as well as numerical value for series L and series R at one extraction frequency. That extraction frequency is defined in the evaluation code section.
 
 ![plot](./doc/run_inductor_diffport.png)
 
 ## run_inductor_2port
 This is the 2-port simulation of the same inductor as mentioned above. Here, two via ports are created down to an artifical common ground reference placed at the surface of the silicon. This ground polygon was added manually in the GDSII file, just like the port polygons.
 
-The resulting S-parameters can be used for simulation, or you can extract a narrowband lumped element pi model using the [pi-from-s2p tool](https://github.com/VolkerMuehlhaus/pi_from_s2p) 
+The resulting S-parameters can be used for simulation, but you can also extract a narrowband lumped element pi model using the [pi-from-s2p](https://github.com/VolkerMuehlhaus/pi_from_s2p) tool.
 
 ![plot](./doc/run_inductor_2port.png)
 
@@ -85,6 +85,8 @@ K. Schmalz, W. Ruoyu, J. Borngräber, W. Debski, W. Winkler , and C.Meliani, “
 An additional layer of air is added all around the drawn layout, and PML_8 absorbing boundaries are defined instead of the PEC metal box walls in most other models. To enable antenna pattern calculation, a NF2FF field sampling box is added to the model. The data evaluation code demonstrates various details of antenna pattern calculation as well as radiation efficiency etc.
 
 ![plot](./doc/run_dual_dipole.png)
+
+![plot](./doc/dipole_pattern.png)
 
 ## run_rfcmim_2port_full
 This is an example for MIM capacitor modelling, demonstrating features like via array merging.
