@@ -189,6 +189,9 @@ def addPorts_to_CSX (CSX, excite_portnumbers,simulation_ports,FDTD, materials_li
                          zmax_from = 0
                        else:
                          from_metal = metals_list.getbylayername(port.from_layername)
+                         if from_metal==None:
+                            print('[ERROR] Invalid layer ' , port.from_layername, ' in port definition, not found in XML stackup file!')
+                            sys.exit(1)                             
                          zmin_from  = from_metal.zmin
                          zmax_from  = from_metal.zmax
                        
@@ -197,6 +200,9 @@ def addPorts_to_CSX (CSX, excite_portnumbers,simulation_ports,FDTD, materials_li
                          zmax_to = 0
                        else:
                          to_metal   = metals_list.getbylayername(port.to_layername)
+                         if to_metal==None:
+                            print('[ERROR] Invalid layer ' , port.to_layername, ' in port definition, not found in XML stackup file!')
+                            sys.exit(1)                             
                          zmin_to    = to_metal.zmin
                          zmax_to    = to_metal.zmax
                        
