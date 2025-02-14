@@ -65,6 +65,8 @@ def create_z_mesh(mesh, dielectrics_list, metals_list, target_cellsize, max_cell
     while check_z:
         check_z = add_missing_lines('z')
 
+    # add mesh line at bottom of stackup at z=0
+    mesh.AddLine('z', 0.0)
 
     # mesh.SmoothMeshLines('z', max_cellsize, 1.3)
     
@@ -172,13 +174,17 @@ def create_xy_mesh_from_polygons (mesh, allpolygons, margin, antenna_margin, tar
         else:
             for point in poly.pts_x:
                 weighted_meshlines_x.addPolyEdge(point)
-                # add small cell left and right 
-                weighted_meshlines_x.addFill(point-target_cellsize)
-                weighted_meshlines_x.addFill(point+target_cellsize)
+                # add small cell left and right
+                if point > allpolygons.xmin:  
+                    weighted_meshlines_x.addFill(point-target_cellsize)
+                if point < allpolygons.xmax:  
+                    weighted_meshlines_x.addFill(point+target_cellsize)
             for point in poly.pts_y:
                 weighted_meshlines_y.addPolyEdge(point)
-                weighted_meshlines_y.addFill(point-target_cellsize)
-                weighted_meshlines_y.addFill(point+target_cellsize)
+                if point > allpolygons.ymin:  
+                    weighted_meshlines_y.addFill(point-target_cellsize)
+                if point < allpolygons.ymin:  
+                    weighted_meshlines_y.addFill(point+target_cellsize)
 
         
         # special case port, the polygon is then a rectangle and we want to insert one extra mesh line in the middle
@@ -222,6 +228,9 @@ def create_xy_mesh_from_polygons (mesh, allpolygons, margin, antenna_margin, tar
 
     weighted_meshlines_x.sort()
     weighted_meshlines_y.sort()
+
+    weighted_meshlines_x.remove_duplicates()
+    weighted_meshlines_y.remove_duplicates()
     
     # step 3: remove mesh lines that are too close, replace with one mesh line in the middle
     def remove_closely_spaced_lines (line_list):
@@ -239,10 +248,16 @@ def create_xy_mesh_from_polygons (mesh, allpolygons, margin, antenna_margin, tar
                 # accept slightly smaller mesh cells than target size
                 new_lines.append(line_list[index]) # append line with value and weight unchanged
             else:
+                ...
                 # too close, we need to merge the lines, based on their weights
                 if this_line.weight == next_line.weight:
-                    # add with average value, unchanged weight 
-                    new_lines.append(weighted_meshline((this_line.value + next_line.value)/2, this_line.weight))
+                    # if close to max boundary
+                    if index==linecount-2:
+                        # skip this line and also next line, max boundary is appended anyway
+                        ...
+                    else:
+                      # add with average value, unchanged weight 
+                      new_lines.append(weighted_meshline((this_line.value + next_line.value)/2, this_line.weight))
                 elif this_line.weight > next_line.weight:
                     # this_line is a polygon edge, prioritize this_line
                     new_lines.append(this_line)
