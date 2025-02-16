@@ -285,10 +285,10 @@ def runSimulation (excite_portnumbers, FDTD, sim_path, model_basename, preview_o
                 sys.exit(1)
 
     if not (preview_only or postprocess_only):  # start simulation 
-        print('Starting FDTD simulation')
+        print('Starting FDTD simulation for excitation ', str(excite_portnumbers))
         try:
             FDTD.Run(excitation_path)  # DO NOT SPECIFY COMMAND LINE OPTIONS HERE! That will fail for repeated runs with multiple excitations.
-            print('FDTD simulation completed successfully.')
+            print('FDTD simulation completed successfully for excitation ', str(excite_portnumbers))
         except AssertionError as e:
             print('[ERROR] AssertionError during FDTD simulation: ', e)
             sys.exit(1)
