@@ -1,8 +1,5 @@
 # Extract objects on IHP layers in GDSII file
 
-# File history: 
-# Initial version 20 Nov 2024  Volker Muehlhaus 
-
 import gdspy
 import numpy as np
 import os
@@ -44,7 +41,6 @@ class gds_polygon:
     return mystr
 
 
-
 class all_polygons_list:
   """
     list of gds polygon objects
@@ -62,6 +58,23 @@ class all_polygons_list:
     poly.process_pts()
     # add polygon to list
     self.polygons.append (poly)
+
+  def add_rectangle (self, x1,y1,x2,y2, layernum, is_port=False, is_via=False):
+    # append simple rectangle to list, this can also be done later, after reading GDSII file
+    poly = gds_polygon(layernum)
+    poly.add_vertex(x1,y1)
+    poly.add_vertex(x1,y2)
+    poly.add_vertex(x2,y2)
+    poly.add_vertex(x2,y1)
+    poly.is_port = is_port
+    poly.is_via = is_via
+    self.append(poly)
+    # need to update manually, for gds that is done after reading file
+    self.xmin = min(self.xmin, x1, x2)
+    self.xmax = max(self.xmax, x1, x2)
+    self.ymin = min(self.ymin, y1, y2)
+    self.ymax = max(self.ymax, y1, y2)
+
 
   def set_bounding_box (self, xmin,xmax,ymin,ymax):
     self.xmin = xmin
