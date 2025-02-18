@@ -183,7 +183,7 @@ def create_xy_mesh_from_polygons (mesh, allpolygons, margin, antenna_margin, tar
                 weighted_meshlines_y.addPolyEdge(point)
                 if point > allpolygons.ymin:  
                     weighted_meshlines_y.addFill(point-target_cellsize)
-                if point < allpolygons.ymin:  
+                if point < allpolygons.ymax:  
                     weighted_meshlines_y.addFill(point+target_cellsize)
 
         
@@ -248,22 +248,16 @@ def create_xy_mesh_from_polygons (mesh, allpolygons, margin, antenna_margin, tar
                 # accept slightly smaller mesh cells than target size
                 new_lines.append(line_list[index]) # append line with value and weight unchanged
             else:
-                ...
-                # too close, we need to merge the lines, based on their weights
-                if this_line.weight == next_line.weight:
-                    # if close to max boundary
-                    if index==linecount-2:
-                        # skip this line and also next line, max boundary is appended anyway
-                        ...
+                if index<linecount-2: 
+                    if this_line.weight == next_line.weight:
+                        # add with average value, unchanged weight 
+                        new_lines.append(weighted_meshline((this_line.value + next_line.value)/2, this_line.weight))
+                    elif this_line.weight > next_line.weight:
+                        # this_line is a polygon edge, prioritize this_line
+                        new_lines.append(this_line)
                     else:
-                      # add with average value, unchanged weight 
-                      new_lines.append(weighted_meshline((this_line.value + next_line.value)/2, this_line.weight))
-                elif this_line.weight > next_line.weight:
-                    # this_line is a polygon edge, prioritize this_line
-                    new_lines.append(this_line)
-                else:
-                    # next_line is a polygon edge, prioritize next_line
-                    new_lines.append(next_line)
+                        # next_line is a polygon edge, prioritize next_line
+                        new_lines.append(next_line)
                 # skip next line, we already handled that
                 index = index+1
                 removed_something = True
