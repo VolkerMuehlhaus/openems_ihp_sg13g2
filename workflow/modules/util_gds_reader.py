@@ -69,11 +69,30 @@ class all_polygons_list:
     poly.is_port = is_port
     poly.is_via = is_via
     self.append(poly)
-    # need to update manually, for gds that is done after reading file
+    # need to update min and max here, for gds data that is done after reading file
     self.xmin = min(self.xmin, x1, x2)
     self.xmax = max(self.xmax, x1, x2)
     self.ymin = min(self.ymin, y1, y2)
     self.ymax = max(self.ymax, y1, y2)
+
+  def add_polygon (self, xy, layernum, is_port=False, is_via=False):
+    # append polygon array to list, this can also be done later, after reading GDSII file
+    # polygon data structure must be [[x1,y1],[x2,y2],...[xn,yn]]
+    poly = gds_polygon(layernum)
+    numpts = len(xy)
+    for pt in range(0, numpts):
+      pt = xy[pt]
+      x = pt[0]
+      y = pt[1]
+      poly.add_vertex(x,y)
+      # need to update min and max here, for gds data that is done after reading file
+      self.xmin = min(self.xmin, x)
+      self.xmax = max(self.xmax, x)
+      self.ymin = min(self.ymin, y)
+      self.ymax = max(self.ymax, y)      
+    self.append(poly)        
+
+    
 
 
   def set_bounding_box (self, xmin,xmax,ymin,ymax):
