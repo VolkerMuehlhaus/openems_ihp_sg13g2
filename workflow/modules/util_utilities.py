@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 
 import os, tempfile, platform
-from pylab import *
 
 
 # ============================== filename and path  =================================
