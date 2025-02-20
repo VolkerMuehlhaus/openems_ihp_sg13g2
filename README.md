@@ -99,3 +99,7 @@ This model shows the 2 port-port simulation of a simple transformer with mixed i
 
 ![plot](./doc/run_transformer_diffport.png)
 
+## run_line_noGDSII
+For all models listed above, polygons for layout and port shape are read from GDSII files. This model is different, it shows how rectangles and polygons can be added by code lines. This can be used in addition to GDSII layout, or instead of GDSII layout.
+
+![plot](./doc/run_line_noGDSII.png)
