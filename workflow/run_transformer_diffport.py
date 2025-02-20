@@ -36,6 +36,9 @@ XML_filename = "SG13G2.xml"               # stackup
 # preprocess GDSII for safe handling of cutouts/holes?
 preprocess_gds = False
 
+# merge via polygons with distance less than .. microns, set to 0 to disable via merging.
+merge_polygon_size = 1.5
+
 # get path for this simulation file
 script_path = utilities.get_script_path(__file__)
 
@@ -84,7 +87,7 @@ layernumbers = metals_list.getlayernumbers()
 layernumbers.extend(simulation_ports.portlayers)
 
 # read geometries from GDSII, only purpose 0, merge vias with distance < 1.5 um
-allpolygons = gds_reader.read_gds(gds_filename, layernumbers, purposelist=[0], metals_list=metals_list, preprocess=preprocess_gds, merge_polygon_size=1.5)
+allpolygons = gds_reader.read_gds(gds_filename, layernumbers, purposelist=[0], metals_list=metals_list, preprocess=preprocess_gds, merge_polygon_size=merge_polygon_size)
 
 
 # calculate maximum cellsize from wavelength in diecletric

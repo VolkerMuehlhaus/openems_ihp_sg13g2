@@ -35,8 +35,8 @@ XML_filename = "SG13G2.xml"               # stackup
 # preprocess GDSII for safe handling of cutouts/holes?
 preprocess_gds = False
 
-# merge via polygons with distance less than 1.5 um
-merge_polygon_size = 1.5
+# merge via polygons with distance less than .. um, set 0 to disable via merging
+merge_polygon_size = 1.0
 
 # get path for this simulation file
 script_path = utilities.get_script_path(__file__)

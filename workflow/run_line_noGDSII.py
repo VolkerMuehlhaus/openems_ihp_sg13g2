@@ -30,7 +30,7 @@ postprocess_only = False
 # ===================== input files and path settings =======================
 
 # gds_filename = "line_simple_viaport.gds"   # geometries
-XML_filename = "SG13G2.xml"               # stackup
+XML_filename = "SG13G2_nosub.xml"               # stackup
 
 # preprocess GDSII for safe handling of cutouts/holes?
 preprocess_gds = False
