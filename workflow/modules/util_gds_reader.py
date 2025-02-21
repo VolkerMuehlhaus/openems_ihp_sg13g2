@@ -268,17 +268,7 @@ def read_gds(filename, layerlist, purposelist, metals_list, preprocess=False, me
 
     all_polygons.set_bounding_box (xmin,xmax,ymin,ymax)
     
-    # mark metal layers that are actually used in this input file
-    # mark if polygon is a via
-    if metals_list != None: 
-      for poly in all_polygons.polygons:
-        layernum = poly.layernum
-        metal = metals_list.getbylayernumber(layernum)
-        if metal != None:
-            metal.is_used = True
-            # set polygon via property, used later for meshing
-            poly.is_via = metal.is_via
-            
+          
       
     # done!
     return all_polygons

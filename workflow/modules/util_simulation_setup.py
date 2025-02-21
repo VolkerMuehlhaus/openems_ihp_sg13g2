@@ -253,8 +253,21 @@ def setupSimulation (excite_portnumbers,simulation_ports, FDTD, materials_list, 
     # add geometries and return list of used materials
     CSX, CSX_materials_list = addGeometry_to_CSX (CSX, excite_portnumbers,simulation_ports,FDTD, materials_list, dielectrics_list, metals_list, allpolygons)
     CSX, CSX_materials_list = addDielectrics_to_CSX (CSX, CSX_materials_list,  materials_list, dielectrics_list, allpolygons, margin, addPEC=(air_around>0))
+
     # add ports
     CSX  = addPorts_to_CSX (CSX, excite_portnumbers,simulation_ports,FDTD, materials_list, dielectrics_list, metals_list, allpolygons)
+
+    # check which layers are actually used, this information is required for meshing in z direction
+    # mark if polygon is a via
+    if metals_list != None: 
+      for poly in allpolygons.polygons:
+        layernum = poly.layernum
+        metal = metals_list.getbylayernumber(layernum)
+        if metal != None:
+            metal.is_used = True
+            # set polygon via property, used later for meshing
+            poly.is_via = metal.is_via
+
     # add mesh
     mesh = addMesh_to_CSX (CSX, allpolygons, dielectrics_list, metals_list, refined_cellsize, max_cellsize, margin, air_around, unit, z_mesh_function, xy_mesh_function )
 
