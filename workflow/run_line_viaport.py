@@ -63,7 +63,7 @@ fstart =  0e9
 fstop  = 110e9
 numfreq = 401
 
-refined_cellsize = 0.5  # mesh cell size in conductor region
+refined_cellsize = 1  # mesh cell size in conductor region
 
 # choices for boundary: 
 # 'PEC' : perfect electric conductor (default)

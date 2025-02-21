@@ -113,6 +113,9 @@ def create_xy_mesh_from_polygons (mesh, allpolygons, margin, antenna_margin, tar
         def addFill (self, value):
             self.meshlines.append (weighted_meshline(value, 1))    # lowest priority in meshing, might move outline if necessary
 
+        def addPortEdge (self, value):
+            self.meshlines.append (weighted_meshline(value, 20))   # higest priority
+
         def sort(self):
             # function to get value for sorting
             def getvalue(item):
@@ -127,6 +130,12 @@ def create_xy_mesh_from_polygons (mesh, allpolygons, margin, antenna_margin, tar
                 if line.value not in values:
                     no_dupe_list.append(line) 
                     values.append(line.value)
+                else:
+                    # we already have this value, but possibly with different weight
+                    # keep the higher weight
+                    i = values.index(line.value) 
+                    existing = no_dupe_list[i]
+                    existing.weight = max(line.weight,existing.weight)
             self.meshlines = no_dupe_list     
 
         def getLines(self):
@@ -173,14 +182,20 @@ def create_xy_mesh_from_polygons (mesh, allpolygons, margin, antenna_margin, tar
                 weighted_meshlines_y.addViaEdge(point)
         else:
             for point in poly.pts_x:
-                weighted_meshlines_x.addPolyEdge(point)
+                if poly.is_port: # highest priority in meshing
+                    weighted_meshlines_x.addPortEdge(point)
+                else: # regular polygon   
+                    weighted_meshlines_x.addPolyEdge(point)
                 # add small cell left and right
                 if point > allpolygons.xmin:  
                     weighted_meshlines_x.addFill(point-target_cellsize)
                 if point < allpolygons.xmax:  
                     weighted_meshlines_x.addFill(point+target_cellsize)
             for point in poly.pts_y:
-                weighted_meshlines_y.addPolyEdge(point)
+                if poly.is_port:  # highest priority in meshing
+                    weighted_meshlines_y.addPortEdge(point)
+                else:  # regular polygon     
+                    weighted_meshlines_y.addPolyEdge(point)
                 if point > allpolygons.ymin:  
                     weighted_meshlines_y.addFill(point-target_cellsize)
                 if point < allpolygons.ymax:  
