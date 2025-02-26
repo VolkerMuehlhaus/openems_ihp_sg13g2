@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-import os, tempfile, platform
+import os, tempfile, platform, sys
 
 
 # ============================== filename and path  =================================
@@ -74,7 +74,7 @@ def calculate_Sij (i, j, f, sim_path, simulation_ports):
         sys.exit(1)
 
 
-def calculate_Yij_2port (i, j, f, sim_path, simulation_ports):
+def calculate_Yij_2port (i, j, f, sim_path, simulation_ports, symmetry=False):
     # Y parameter calculation for 2-port data, returns  one element of the Y matrix, 
     # requires all ports excitations to be simulated because we need full S matrix
     try:
@@ -87,8 +87,12 @@ def calculate_Yij_2port (i, j, f, sim_path, simulation_ports):
         # get S matrix elements
         s11 = calculate_Sij (1, 1, f, sim_path, simulation_ports)
         s21 = calculate_Sij (2, 1, f, sim_path, simulation_ports)
-        s12 = calculate_Sij (1, 2, f, sim_path, simulation_ports)
-        s22 = calculate_Sij (2, 2, f, sim_path, simulation_ports)        
+        if symmetry:
+            s22 = s11
+            s12 = s21
+        else:    
+            s12 = calculate_Sij (1, 2, f, sim_path, simulation_ports)
+            s22 = calculate_Sij (2, 2, f, sim_path, simulation_ports)        
     
         Y0 = 1/Z0
 
@@ -115,7 +119,7 @@ def calculate_Yij_2port (i, j, f, sim_path, simulation_ports):
 
 
         
-def calculate_Zij_2port (i, j, f, sim_path, simulation_ports):
+def calculate_Zij_2port (i, j, f, sim_path, simulation_ports, symmetry=False):
     # Z parameter calculation for 2-port data, returns  one element of the Z matrix, 
     # requires all ports excitations to be simulated because we need full S matrix
     try:
@@ -129,8 +133,12 @@ def calculate_Zij_2port (i, j, f, sim_path, simulation_ports):
         # get S matrix elements
         s11 = calculate_Sij (1, 1, f, sim_path, simulation_ports)
         s21 = calculate_Sij (2, 1, f, sim_path, simulation_ports)
-        s12 = calculate_Sij (1, 2, f, sim_path, simulation_ports)
-        s22 = calculate_Sij (2, 2, f, sim_path, simulation_ports)        
+        if symmetry:
+            s22 = s11
+            s12 = s21
+        else:    
+            s12 = calculate_Sij (1, 2, f, sim_path, simulation_ports)
+            s22 = calculate_Sij (2, 2, f, sim_path, simulation_ports)        
     
         
         if (i==1) and (j==1):
