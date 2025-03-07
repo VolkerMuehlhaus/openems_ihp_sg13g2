@@ -52,15 +52,11 @@ This model simulates a simple thru line, with via ports on both ends. Excitation
 
 Note that the Metal1 ground plane is modelled and meshed explicitely. It is not recommended to use the bottom PEC boundary for this, because that is a lossless boundary and the Metal1 resistance would not show up in results. Also note that port size will lead to parasitic inductance, port de-embedding is not implemented so far.
 
-## run_line_GSG
+## run_line_GSG_complex
 This model simulates a thru line with GSG pads on both ends. To properly simulate this, we use a composite port from two in-plane openEMS ports, one to each side from signal line to the ground pad. To drive the center conductor in-phase between these two ports, one is defined with opposite polarity. Both ports are in parallel, so each of then is defined with 2x the normal impedance.
-
-![plot](./doc/run_line_gsg.png)
-
 The resulting S-parameters for each GSG port are calculated in the evaluation code section, combining the data from the "sub-ports" into one effective GSG port result on each end of the line.
 
-## run_line_GSG_complex
-Much like the previous GSG example, but with a more complex real world layout. In the model code, layout pre-processing is enable to properly handle the cutouts in polygons. Without that pre-processing, openEMS polygons would not create the proper shape, due to self-intersecting polygons.
+In the model code, layout pre-processing is enable to properly handle the cutouts (holes) in polygons. Without that pre-processing, openEMS polygons would not create the proper shape, due to self-intersecting polygons.
 
 ![plot](./doc/run_line_gsg_complex.png)
 
@@ -93,11 +89,6 @@ This is an example for MIM capacitor modelling, demonstrating features like via 
 The ultra thin MIM dielectric in the stackup is replaced by a thicker dielectric with larger permittivity, resulting in the same area capacitance. This is to prevent an ultra-small time step in simulation that would be required to resolve the ultra-thin MIM dielectric, slowing down simulation.
 
 ![plot](./doc/run_rfcmim_2port_full.png)
-
-## run_transformer_diffport
-This model shows the 2 port-port simulation of a simple transformer with mixed impedance, to show how mixed impedances can be handled in S-parameter plotting. Of course, you could also simulate using 50 Ohm ports everywhere and then create 50 Ohm S-parameters, if that data block is to be used elsewhere in simulation. The results will be perfectly valid with 50 Ohm ports, no matter what the DUT impedance is.
-
-![plot](./doc/run_transformer_diffport.png)
 
 ## run_line_noGDSII
 For all models listed above, polygons for layout and port shape are read from GDSII files. This model is different, it shows how rectangles and polygons can be added by code lines. This can be used in addition to GDSII layout, or instead of GDSII layout.
