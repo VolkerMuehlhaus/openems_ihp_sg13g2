@@ -68,7 +68,7 @@ This model simulates an octagon inductor. There is only one in-plane port, place
 ## run_inductor_2port
 This is the 2-port simulation of the same inductor as mentioned above. Here, two via ports are created down to an artifical common ground reference placed at the surface of the silicon. This ground polygon was added manually in the GDSII file, just like the port polygons.
 
-The resulting S-parameters can be used for simulation, but you can also extract a narrowband lumped element pi model using the [pi-from-s2p](https://github.com/VolkerMuehlhaus/pi_from_s2p) tool.
+The resulting S-parameters can be used for simulation, but you can also extract a narrowband lumped element pi model using the [pi-from-s2p](https://github.com/VolkerMuehlhaus/lumpedmodel/tree/main/pi_from_s2p) tool.
 
 ![plot](./doc/run_inductor_2port.png)
 
@@ -87,6 +87,8 @@ An additional layer of air is added all around the drawn layout, and PML_8 absor
 ## run_rfcmim_2port_full
 This is an example for MIM capacitor modelling, demonstrating features like via array merging.
 The ultra thin MIM dielectric in the stackup is replaced by a thicker dielectric with larger permittivity, resulting in the same area capacitance. This is to prevent an ultra-small time step in simulation that would be required to resolve the ultra-thin MIM dielectric, slowing down simulation.
+
+The resulting S-parameters can be used for simulation, but you can also extract a lumped element pi model using the [mim-from-s2p](https://github.com/VolkerMuehlhaus/lumpedmodel/tree/main/mim_from_s2p) tool.
 
 ![plot](./doc/run_rfcmim_2port_full.png)
 
