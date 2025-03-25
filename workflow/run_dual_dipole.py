@@ -8,13 +8,14 @@ import modules.util_utilities as utilities
 import modules.util_simulation_setup as simulation_setup
 import modules.util_meshlines as util_meshlines
 
-from pylab import *
 from CSXCAD import ContinuousStructure
 from CSXCAD import AppCSXCAD_BIN
 from openEMS import openEMS
-from openEMS.physical_constants import *
+import numpy as np
+import matplotlib.pyplot as plt
 
 # Model comments
+#
 # Dual dipole 245 GHz, design by IHP Klaus Schmalz
 # Port defined in GDSIIfile on layer 201
 # nf2ff_box field sampling at boundary for pattern calculation
@@ -30,7 +31,7 @@ postprocess_only = False
 # ===================== input files and path settings =======================
 
 gds_filename = "dipole_port_sg13.gds"   # geometries
-XML_filename = "SG13G2_200um.xml"         # stackup
+XML_filename = "SG13G2_200um.xml"       # stackup
 
 # preprocess GDSII for safe handling of cutouts/holes?
 preprocess_gds = True
@@ -51,14 +52,14 @@ print('Simulation data directory: ', sim_path)
 
 # ======================== simulation settings ================================
 
-unit   = 1e-6   # geometry is in microns
+unit_m = 1e-6   # geometry dimensions and all lengths unit is µm (micrometer)
 margin = 100    # distance in microns from GDSII geometry boundary to chip boundary 
 
-fstart = 200e9
-fstop  = 300e9
-numfreq = 401
+f_start = 200e9
+f_stop  = 300e9
+num_freq = 401
 
-ftarget = 245e9  # frequency for antenna pattern calculation
+f_target = 245e9  # frequency for antenna pattern calculation
 
 refined_cellsize = 2.5  # mesh cell size in conductor region
 
@@ -89,111 +90,133 @@ layernumbers.extend(simulation_ports.portlayers)
 allpolygons = gds_reader.read_gds(gds_filename, layernumbers, purposelist=[0], metals_list=metals_list, preprocess=preprocess_gds, merge_polygon_size=merge_polygon_size)
 
 # calculate maximum cellsize from wavelength in dielectric
-wavelength_air = 3e8/fstop
-max_cellsize = (wavelength_air/unit)/(sqrt(materials_list.eps_max)*cells_per_wavelength) 
+wavelength_air = 3e8/f_stop / unit_m
+max_cellsize = (wavelength_air)/(np.sqrt(materials_list.eps_max)*cells_per_wavelength) 
 
 
 ########### create model, run and post-process ###########
 
 # Prepare simulation for port 1 excitation
 excite_ports = [1]  # list of ports that are excited for this simulation run
-FDTD = openEMS(EndCriteria=exp(energy_limit/10 * log(10)))
-FDTD.SetGaussExcite( (fstart+fstop)/2, (fstop-fstart)/2 )
+FDTD = openEMS(EndCriteria=np.exp(energy_limit/10 * np.log(10)))
+FDTD.SetGaussExcite( (f_start+f_stop)/2, (f_stop-f_start)/2 )
 FDTD.SetBoundaryCond( Boundaries )
 
-FDTD = simulation_setup.setupSimulation (excite_ports, simulation_ports, FDTD, materials_list, dielectrics_list, metals_list, allpolygons, max_cellsize, refined_cellsize, margin, unit, xy_mesh_function=util_meshlines.create_xy_mesh_from_polygons, air_around=0.5*wavelength_air/unit)
+FDTD = simulation_setup.setupSimulation(
+    excite_ports, 
+    simulation_ports, 
+    FDTD, 
+    materials_list, 
+    dielectrics_list, 
+    metals_list, 
+    allpolygons, 
+    max_cellsize, 
+    refined_cellsize, 
+    margin, 
+    unit_m, 
+    xy_mesh_function = util_meshlines.create_xy_mesh_from_polygons, 
+    air_around = 0.5*wavelength_air
+    )
 
 # add nf2ff box for antenna pattern calculation
-nf2ff_box = FDTD.CreateNF2FFBox(opt_resolution=[max_cellsize]*3,  frequency = [ftarget])
+nf2ff_box = FDTD.CreateNF2FFBox(opt_resolution = [max_cellsize]*3, frequency = [f_target])
 
 # run simulation
-sub1_data_path = simulation_setup.runSimulation (excite_ports, FDTD, sim_path, model_basename, preview_only, postprocess_only)
-
+sub1_data_path = simulation_setup.runSimulation(excite_ports, FDTD, sim_path, model_basename, preview_only, postprocess_only)
 
 # simulation is finished, get results, CSX port definition is read from simulation ports object
 CSX_port1 = simulation_ports.get_port_by_number(1).CSXport
 
+# definition of some utility functions
+def dB(value, factor=20):
+    return factor*np.log10(np.abs(value))
+def dBm(value, factor=20):
+    return dB(value/1e-3, factor=factor)
+
 # evaluate results for 1-port simulation
 if not preview_only:  
-  f = np.linspace(fstart,fstop,numfreq)
+    f = np.linspace(f_start, f_stop, num_freq)
 
-  s11 = utilities.calculate_Sij (1, 1, f, sim_path, simulation_ports)
-  s11_dB = 20.0*np.log10(np.abs(s11))
+    s11 = utilities.calculate_Sij(1, 1, f, sim_path, simulation_ports)
+    s11_dB = dB(s11)
 
-  # write Touchstone S1P file
-  s1p_name = os.path.join(sim_path, model_basename + '.s1p')
-  utilities.write_snp (np.array([s11]),f, s1p_name)
+    # write Touchstone S1P file
+    s1p_name = os.path.join(sim_path, model_basename + '.s1p')
+    utilities.write_snp (np.array([s11]),f, s1p_name)
 
-  # plot return loss
-  figure()
-  plot(f/1e9, s11_dB, 'k-', linewidth=2, label='S11 [dB]')
-  grid()
-  xlabel('Frequency (GHz)')
-  legend()
-  
-  
-  print('Calculating antenna pattern, this will take a while!')
-  
-  theta = np.arange(-180.0, 180.0, 2.0)
-  phi   = [0., 90.]
-  nf2ff_res = nf2ff_box.CalcNF2FF(sub1_data_path, ftarget, theta, phi)
+    # plot return loss
+    fig, axis = plt.subplots(num="Return Loss", tight_layout=True)
+    axis.plot(f/1e9, s11_dB, 'k-', linewidth=2, label='S11 (dB)')
+    axis.grid()
+    axis.set_xmargin(0)
+    axis.set_xlabel('Frequency (GHz)')
+    axis.set_title("Return Loss")
+    axis.legend()
+    
+    print('Calculating antenna pattern, this will take a while!')
+    
+    theta = np.arange(-180.0, 180.0, 2.0)
+    phi   = [0., 90.]
+    nf2ff_res = nf2ff_box.CalcNF2FF(sub1_data_path, f_target, theta, phi)
 
-  # INPUT POWER values into feed port at evaluation frequency
-  # P_acc = accepted power (incoming - reflected)
-  # P_inc = incident power (incoming), regardless of reflection
-  
-  # get accepted power into port
-  Pin_accepted = np.interp(ftarget, f, CSX_port1.P_acc)
-  # get incident power
-  P_incident = np.interp(ftarget, f, CSX_port1.P_inc)
+    # INPUT POWER values into feed port at evaluation frequency
+    # P_acc = accepted power (incoming - reflected)
+    # P_inc = incident power (incoming), regardless of reflection
+    
+    # get accepted power into port
+    Pin_accepted = np.interp(f_target, f, CSX_port1.P_acc)
+    # get incident power
+    P_incident = np.interp(f_target, f, CSX_port1.P_inc)
 
-  # get total radiated power at nf2ff frequency 
-  Prad_total = nf2ff_res.Prad[0]
-  # get directivity (peak value) at nf2ff frequency 
-  Dmax_dB = 10*log10(nf2ff_res.Dmax[0])
-  # calculate radiation efficiency (lossless antenna is 1, regardless of input matching)
-  radiation_efficiency = Prad_total/Pin_accepted
-  radiation_efficiency_dB = 10.0*np.log10(radiation_efficiency)  # negative for lossy antenna
-  # loss from reflection due to mismatch
-  mismatch_loss =  Pin_accepted/P_incident
-  mismatch_loss_dB = 10*log10(mismatch_loss)
+    # get total radiated power at nf2ff frequency 
+    Prad_total = nf2ff_res.Prad[0]
+    # get directivity (peak value) at nf2ff frequency 
+    Dmax_dB = dB(nf2ff_res.Dmax[0], 10)
+    # calculate radiation efficiency (lossless antenna is 1, regardless of input matching)
+    radiation_efficiency = Prad_total/Pin_accepted
+    radiation_efficiency_dB = dB(radiation_efficiency, 10)  # negative for lossy antenna
+    # loss from reflection due to mismatch
+    mismatch_loss =  Pin_accepted/P_incident
+    mismatch_loss_dB = dB(mismatch_loss, 10)
 
-  # evaluate far field components
-  # normalize E field components to peak value of absolute field, and multiply by directivity
-  directivity_abs  = 20.0*np.log10(np.abs(nf2ff_res.E_norm[0])/np.max(nf2ff_res.E_norm[0])) + Dmax_dB
-  directivity_abs_xz = directivity_abs[:,0] # get field in xz plane, that is phi=0, which is index 0 
-  directivity_abs_yz = directivity_abs[:,1] # get field in yz plane, that is phi=90, which is index 1 
+    # evaluate far field components
+    # normalize E field components to peak value of absolute field, and multiply by directivity
+    directivity_abs  = dB(nf2ff_res.E_norm[0]/np.max(nf2ff_res.E_norm[0])) + Dmax_dB
+    directivity_abs_xz = directivity_abs[:,0] # get field in xz plane, that is phi=0, which is index 0 
+    directivity_abs_yz = directivity_abs[:,1] # get field in yz plane, that is phi=90, which is index 1 
 
-  gain_abs_xz = directivity_abs_xz + radiation_efficiency_dB
-  gain_abs_yz = directivity_abs_yz + radiation_efficiency_dB
+    gain_abs_xz = directivity_abs_xz + radiation_efficiency_dB
+    gain_abs_yz = directivity_abs_yz + radiation_efficiency_dB
 
-  # display radiated power and directivity
-  print('Antenna parameters at ',ftarget/1e9, ' GHz:' )
-  print( f" Incident power P_incident = {P_incident:.3e} W")
-  print( f" Accepted power Pin_accepted = {Pin_accepted:.3e} W")
-  print( f" Radiated power Prad_total = {Prad_total:.3e} W")
-  print( f" Directivity Dmax = {Dmax_dB:.2f} dBi")
-  print( f" efficiency: nu_rad = {100*radiation_efficiency:.1f}%, {radiation_efficiency_dB:.2f} dB")
-  print( f" mismatch loss: {mismatch_loss:.3f} (linear), {mismatch_loss_dB:.2f} dB")
+    # display radiated power and directivity
+    print(f"Antenna parameters at {f_target/1e9:g} GHz:")
+    print(f"    Incident power P_incident  =  {P_incident:.3e} W  =  {dBm(P_incident, 10):g} dBm")
+    print(f"    Accepted power Pin_accepted  =  {Pin_accepted:.3e} W  =  {dBm(Pin_accepted, 10):g} dBm")
+    print(f"    Radiated power Prad_total  =  {Prad_total:.3e} W  =  {dBm(Prad_total, 10):g} dBm")
+    print(f"    Directivity Dmax  =  {Dmax_dB:g} dBi")
+    print(f"    efficiency nu_rad  =  {100*radiation_efficiency:g} %  =  {radiation_efficiency_dB:g} dB")
+    print(f"    mismatch loss  =  {mismatch_loss:g} (linear)  =  {mismatch_loss_dB:g} dB")
 
 
-  figure()
-  plot(theta, np.squeeze(directivity_abs_xz), 'k-',  linewidth=2, label='xz-plane')
-  plot(theta, np.squeeze(directivity_abs_yz), 'r--', linewidth=2, label='yz-plane')
-  grid()
-  ylabel('Directivity (dBi)')
-  xlabel('Theta (deg)')
-  title('Frequency: {} GHz'.format(ftarget/1e9))
-  legend()
+    fig, axis = plt.subplots(num="Directivity", tight_layout=True)
+    axis.plot(theta, np.squeeze(directivity_abs_xz), 'k-',  linewidth=2, label='xz-plane')
+    axis.plot(theta, np.squeeze(directivity_abs_yz), 'r--', linewidth=2, label='yz-plane')
+    axis.grid()
+    axis.set_xmargin(0)
+    axis.set_xlabel('Theta (deg)')
+    axis.set_ylabel('Directivity (dBi)')
+    axis.set_title(f'Directivity at Frequency: {f_target/1e9:g} GHz')
+    axis.legend()
 
-  figure()
-  plot(theta, np.squeeze(gain_abs_xz), 'k-',  linewidth=2, label='xz-plane')
-  plot(theta, np.squeeze(gain_abs_yz), 'r--', linewidth=2, label='yz-plane')
-  grid()
-  ylabel('Gain (dBi)')
-  xlabel('Theta (deg)')
-  title('Frequency: {} GHz'.format(ftarget/1e9))
-  legend()
+    fig, axis = plt.subplots(num="Gain", tight_layout=True)
+    axis.plot(theta, np.squeeze(gain_abs_xz), 'k-',  linewidth=2, label='xz-plane')
+    axis.plot(theta, np.squeeze(gain_abs_yz), 'r--', linewidth=2, label='yz-plane')
+    axis.grid()
+    axis.set_xmargin(0)
+    axis.set_xlabel('Theta (deg)')
+    axis.set_ylabel('Gain (dBi)')
+    axis.set_title(f'Gain at Frequency: {f_target/1e9:g} GHz')
+    axis.legend()
 
-  # show all plots
-  show()
+    # show all plots
+    plt.show()
