@@ -52,7 +52,7 @@ print('Simulation data directory: ', sim_path)
 
 # ======================== simulation settings ================================
 
-unit_m = 1e-6   # geometry dimensions and all lengths unit is µm (micrometer)
+unit = 1e-6   # geometry dimensions and all lengths unit is µm (micrometer)
 margin = 100    # distance in microns from GDSII geometry boundary to chip boundary 
 
 f_start = 200e9
@@ -90,7 +90,7 @@ layernumbers.extend(simulation_ports.portlayers)
 allpolygons = gds_reader.read_gds(gds_filename, layernumbers, purposelist=[0], metals_list=metals_list, preprocess=preprocess_gds, merge_polygon_size=merge_polygon_size)
 
 # calculate maximum cellsize from wavelength in dielectric
-wavelength_air = 3e8/f_stop / unit_m
+wavelength_air = 3e8/f_stop / unit
 max_cellsize = (wavelength_air)/(np.sqrt(materials_list.eps_max)*cells_per_wavelength) 
 
 
@@ -113,7 +113,7 @@ FDTD = simulation_setup.setupSimulation(
     max_cellsize, 
     refined_cellsize, 
     margin, 
-    unit_m, 
+    unit, 
     xy_mesh_function = util_meshlines.create_xy_mesh_from_polygons, 
     air_around = 0.5*wavelength_air
     )
