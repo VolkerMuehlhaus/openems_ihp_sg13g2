@@ -1,4 +1,3 @@
-
 import os
 import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), 'modules')))
@@ -9,12 +8,9 @@ import modules.util_utilities as utilities
 import modules.util_simulation_setup as simulation_setup
 import modules.util_meshlines as util_meshlines
 
-import os
-from pylab import *
-from CSXCAD import ContinuousStructure
-from CSXCAD import AppCSXCAD_BIN
 from openEMS import openEMS
-from openEMS.physical_constants import *
+import numpy as np
+import matplotlib.pyplot as plt
 
 # Model comments
 # Simple inductor model, 1 port only
@@ -87,19 +83,31 @@ layernumbers.extend(simulation_ports.portlayers)
 allpolygons = gds_reader.read_gds(gds_filename, layernumbers, purposelist=[0], metals_list=metals_list, preprocess=preprocess_gds, merge_polygon_size=merge_polygon_size)
 
 
-# calculate maximum cellsize from wavelength in diecletric
-wavelength_air = 3e8/fstop
-max_cellsize = (wavelength_air/unit)/(sqrt(materials_list.eps_max)*cells_per_wavelength) 
+# calculate maximum cellsize from wavelength in dielectric
+wavelength_air = 3e8/fstop / unit
+max_cellsize = (wavelength_air)/(np.sqrt(materials_list.eps_max)*cells_per_wavelength) 
 
 
 ########### create model, run and post-process ###########
 
 # Create simulation for port 1 excitation, return value is data path for that excitation
 excite_ports = [1]  # list of ports that are excited for this simulation run
-FDTD = openEMS(EndCriteria=exp(energy_limit/10 * log(10)))
+FDTD = openEMS(EndCriteria=np.exp(energy_limit/10 * np.log(10)))
 FDTD.SetGaussExcite( (fstart+fstop)/2, (fstop-fstart)/2 )
 FDTD.SetBoundaryCond( Boundaries )
-FDTD = simulation_setup.setupSimulation (excite_ports, simulation_ports, FDTD, materials_list, dielectrics_list, metals_list, allpolygons, max_cellsize, refined_cellsize, margin, unit,xy_mesh_function=util_meshlines.create_xy_mesh_from_polygons)
+FDTD = simulation_setup.setupSimulation (excite_ports, 
+                                         simulation_ports, 
+                                         FDTD, 
+                                         materials_list, 
+                                         dielectrics_list, 
+                                         metals_list, 
+                                         allpolygons, 
+                                         max_cellsize, 
+                                         refined_cellsize, 
+                                         margin, 
+                                         unit,
+                                         xy_mesh_function=util_meshlines.create_xy_mesh_from_polygons)
+
 sub1_data_path = simulation_setup.runSimulation (excite_ports, FDTD, sim_path, model_basename, preview_only, postprocess_only)
 
 # get results, CSX port definition is read from simulation ports object
@@ -127,7 +135,7 @@ if not preview_only:
   # print some inductor data
   # get series L and series R at frequency of interest
   targetfreq = 10e9
-  findex = where (f>=targetfreq)[0]
+  findex = np.where (f>=targetfreq)[0]
   findex = findex.item(0)
 
   print('\nDifferential inductor parameters')
@@ -141,21 +149,25 @@ if not preview_only:
   print(f"R_DC      [Ohm]: {Rdiff[0]:.3f}")  
   print(f"Peak Q         : {max(Qdiff):.2f}") 
 
-  figure()
-  plot(f/1e9, Ldiff*1e9, 'k-', linewidth=2, label='Lseries [nH]')
-  ylim(0, 10)
-  xlim(0, fstop/1e9)
-  grid()
-  legend()
-  xlabel('Frequency (GHz)')
-  
-  figure()
-  plot(f/1e9, Qdiff, 'k-', linewidth=2, label='Q factor')
-  ylim(0, 30)
-  xlim(0, fstop/1e9)
-  grid()
-  legend()
-  xlabel('Frequency (GHz)')
 
-  # Show all plots
-  show()
+  fig, axis = plt.subplots(num="Inductance", tight_layout=True)
+  axis.plot(f/1e9, Ldiff*1e9, 'k-',  linewidth=2, label='Lseries [nH]')
+  axis.grid()
+  axis.set_xmargin(0)
+  axis.set_ylim([0, 10])
+  axis.set_xlabel('Frequency (GHz)')
+  axis.set_title("Inductance")
+  axis.legend()
+
+
+  fig, axis = plt.subplots(num="Q factor", tight_layout=True)
+  axis.plot(f/1e9, Ldiff*1e9, 'k-',  linewidth=2, label='Lseries [nH]')
+  axis.grid()
+  axis.set_xmargin(0)
+  axis.set_ylim([0, 30])
+  axis.set_xlabel('Frequency (GHz)')
+  axis.set_title("Q factor")
+  axis.legend()
+
+  # show all plots
+  plt.show()

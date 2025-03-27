@@ -8,12 +8,9 @@ import modules.util_utilities as utilities
 import modules.util_simulation_setup as simulation_setup
 import modules.util_meshlines as util_meshlines
 
-import os
-from pylab import *
-from CSXCAD import ContinuousStructure
-from CSXCAD import AppCSXCAD_BIN
 from openEMS import openEMS
-from openEMS.physical_constants import *
+import numpy as np
+import matplotlib.pyplot as plt
 
 # Model comments
 # MIM model, ultra thin dielectric layer is replaced in stackup file by equivalent dielectric with larger thickness and larger eps_r, 
@@ -90,9 +87,10 @@ layernumbers.extend(simulation_ports.portlayers)
 allpolygons = gds_reader.read_gds(gds_filename, layernumbers, purposelist=[0], metals_list=metals_list, preprocess=preprocess_gds, merge_polygon_size=merge_polygon_size)
 
 
-# calculate maximum cellsize from wavelength in diecletric
-wavelength_air = 3e8/fstop
-max_cellsize = (wavelength_air/unit)/(sqrt(materials_list.eps_max)*cells_per_wavelength) 
+# calculate maximum cellsize from wavelength in dielectric
+wavelength_air = 3e8/fstop / unit
+max_cellsize = (wavelength_air)/(np.sqrt(materials_list.eps_max)*cells_per_wavelength) 
+
 
 
 
@@ -101,10 +99,22 @@ max_cellsize = (wavelength_air/unit)/(sqrt(materials_list.eps_max)*cells_per_wav
 # Create simulation for port 1 and 2 excitation, return value is list of data paths, one for each excitation
 data_paths = []
 for excite_ports in [[1],[2]]:  # list of ports that are excited one after another
-    FDTD = openEMS(EndCriteria=exp(energy_limit/10 * log(10)))
+    FDTD = openEMS(EndCriteria=np.exp(energy_limit/10 * np.log(10)))
     FDTD.SetGaussExcite( (fstart+fstop)/2, (fstop-fstart)/2 )
     FDTD.SetBoundaryCond( Boundaries )
-    FDTD = simulation_setup.setupSimulation (excite_ports, simulation_ports, FDTD, materials_list, dielectrics_list, metals_list, allpolygons, max_cellsize, refined_cellsize, margin, unit, xy_mesh_function=util_meshlines.create_xy_mesh_from_polygons)
+    FDTD = simulation_setup.setupSimulation (excite_ports, 
+                                             simulation_ports, 
+                                             FDTD, 
+                                             materials_list, 
+                                             dielectrics_list, 
+                                             metals_list, 
+                                             allpolygons, 
+                                             max_cellsize, 
+                                             refined_cellsize, 
+                                             margin, 
+                                             unit, 
+                                             xy_mesh_function=util_meshlines.create_xy_mesh_from_polygons)
+    
     data_paths.append(simulation_setup.runSimulation (excite_ports, FDTD, sim_path, model_basename, preview_only, postprocess_only))
 
 
@@ -118,7 +128,7 @@ if preview_only==False:
 
     # define phase function for S-parameters
     def phase(value):
-        return angle(value, deg=True) 
+        return np.angle(value, deg=True) 
 
     f = np.linspace(fstart,fstop,numfreq)
 

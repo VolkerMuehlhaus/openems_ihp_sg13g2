@@ -1,8 +1,6 @@
-
 import os
 import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), 'modules')))
-
 
 import modules.util_stackup_reader as stackup_reader
 import modules.util_gds_reader as gds_reader
@@ -10,11 +8,9 @@ import modules.util_utilities as utilities
 import modules.util_simulation_setup as simulation_setup
 import modules.util_meshlines as util_meshlines
 
-from pylab import *
-from CSXCAD import ContinuousStructure
-from CSXCAD import AppCSXCAD_BIN
 from openEMS import openEMS
-from openEMS.physical_constants import *
+import numpy as np
+import matplotlib.pyplot as plt
 
 # Model comments
 # This model has one challenge: 
@@ -94,9 +90,9 @@ layernumbers.extend(simulation_ports.portlayers)
 allpolygons = gds_reader.read_gds(gds_filename, layernumbers, purposelist=[0], metals_list=metals_list, preprocess=preprocess_gds, merge_polygon_size=merge_polygon_size)
 
 
-# calculate maximum cellsize from wavelength in diecletric
-wavelength_air = 3e8/fstop
-max_cellsize = (wavelength_air/unit)/(sqrt(materials_list.eps_max)*cells_per_wavelength) 
+# calculate maximum cellsize from wavelength in dielectric
+wavelength_air = 3e8/fstop / unit
+max_cellsize = (wavelength_air)/(np.sqrt(materials_list.eps_max)*cells_per_wavelength) 
 
 
 ########### create model, run and post-process ###########
@@ -105,12 +101,24 @@ max_cellsize = (wavelength_air/unit)/(sqrt(materials_list.eps_max)*cells_per_wav
 # Excited GSG port on left side is composite from CSX ports 1+2, opposite polarity, so we excite 1+2 simultaneously
 excite_ports = [1,2]  # list of ports that are excited for this simulation run
 
-FDTD = openEMS(EndCriteria=exp(energy_limit/10 * log(10)))
+FDTD = openEMS(EndCriteria=np.exp(energy_limit/10 * np.log(10)))
 FDTD.SetGaussExcite( (fstart+fstop)/2, (fstop-fstart)/2 )
 FDTD.SetBoundaryCond( Boundaries )
 
 # use polygon-based meshing
-FDTD = simulation_setup.setupSimulation (excite_ports, simulation_ports, FDTD, materials_list, dielectrics_list, metals_list, allpolygons, max_cellsize, refined_cellsize, margin, unit, xy_mesh_function=util_meshlines.create_xy_mesh_from_polygons)
+FDTD = simulation_setup.setupSimulation (excite_ports, 
+                                         simulation_ports, 
+                                         FDTD, 
+                                         materials_list, 
+                                         dielectrics_list, 
+                                         metals_list, 
+                                         allpolygons, 
+                                         max_cellsize, 
+                                         refined_cellsize, 
+                                         margin, 
+                                         unit, 
+                                         xy_mesh_function=util_meshlines.create_xy_mesh_from_polygons)
+
 # run simulation
 sub1_data_path = simulation_setup.runSimulation (excite_ports, FDTD, sim_path, model_basename, preview_only, postprocess_only)
 
@@ -148,34 +156,47 @@ if not preview_only:
     s2p_name = os.path.join(sim_path, model_basename + '.s2p')
     utilities.write_snp (np.array([[s11, s21],[s12,s22]]),f, s2p_name)
 
-    s11_dB = 20.0*np.log10(np.abs(s11))
-    s21_dB = 20.0*np.log10(np.abs(s21))
-    s11_phase = angle(s11, deg=True) 
-    s21_phase = angle(s21, deg=True) 
 
-    figure()
-    plot(f/1e9, s11_dB, 'k-', linewidth=2, label='S11 [dB]')
-    grid()
-    legend()
-    xlabel('Frequency (GHz)')
+    # define dB function for S-parameters
+    def dB(value):
+        return 20.0*np.log10(np.abs(value))        
 
-    figure()
-    plot(f/1e9, s21_dB, 'k-', linewidth=2, label='S21 [dB]')
-    grid()
-    legend()
-    xlabel('Frequency (GHz)')
+    # define phase function for S-parameters
+    def phase(value):
+        return np.angle(value, deg=True) 
 
-    figure()
-    plot(f/1e9, s21_phase, 'k-', linewidth=2, label='phase S21 [deg]')
-    grid()
-    legend()
-    xlabel('Frequency (GHz)')
+      
+    fig, axis = plt.subplots(num='Return Loss', tight_layout=True)
+    axis.plot(f/1e9, dB(s11), 'k-',  linewidth=2, label='S11 (dB)')
+    axis.grid()
+    axis.set_xmargin(0)
+    axis.set_xlabel('Frequency (GHz)')
+    axis.set_title('Return Loss')
+    axis.legend()
+    
+    fig, axis = plt.subplots(num='Insertion Loss', tight_layout=True)
+    axis.plot(f/1e9, dB(s21), 'k-',  linewidth=2, label='S21 (dB)')
+    axis.grid()
+    axis.set_xmargin(0)
+    axis.set_xlabel('Frequency (GHz)')
+    axis.set_title('Insertion Loss')
+    axis.legend()
 
-    figure()
-    plot(f/1e9, real(Zin), 'k-', linewidth=2, label='Real(Zin)')
-    grid()
-    legend()
-    xlabel('Frequency (GHz)')
+    fig, axis = plt.subplots(num='Transmission Phase', tight_layout=True)
+    axis.plot(f/1e9, phase(s21), 'k-',  linewidth=2, label='S21 (dB)')
+    axis.grid()
+    axis.set_xmargin(0)
+    axis.set_xlabel('Frequency (GHz)')
+    axis.set_title('Transmission Phase')
+    axis.legend()
+
+    fig, axis = plt.subplots(num='Input Impedance', tight_layout=True)
+    axis.plot(f/1e9, np.real(Zin), 'k-',  linewidth=2, label='Real(Zin)')
+    axis.grid()
+    axis.set_xmargin(0)
+    axis.set_xlabel('Frequency (GHz)')
+    axis.set_title('Input Impedance')
+    axis.legend()
 
     #portVariable.u_data.ui_val[0] = U over time
     #portVariable.i_data.ui_val[0] = I over time
@@ -188,16 +209,16 @@ if not preview_only:
     u4 = CSX_port4.u_data.ui_val[0]
     t  = CSX_port1.u_data.ui_time[0]
 
-    figure()
-    plot(t*1e9,u1, 'r-', label='u1')
-    plot(t*1e9,u2, 'k:', label='u2')
-    plot(t*1e9,u3, 'b-', label='u3')
-    plot(t*1e9,u4, 'y:', label='u4')
-    grid()
-    ylabel('Port voltages (V)')
-    xlabel('Time (ns)')
-    legend()
+    fig, axis = plt.subplots(num='Port voltages (V)', tight_layout=True)
+    axis.plot(t*1e9, u1, 'r-',  linewidth=2, label='u1')
+    axis.plot(t*1e9, u2, 'k:',  linewidth=2, label='u2')
+    axis.plot(t*1e9, u3, 'b-',  linewidth=2, label='u3')
+    axis.plot(t*1e9, u4, 'y:',  linewidth=2, label='u4')
+    axis.grid()
+    axis.set_xmargin(0)
+    axis.set_xlabel('Time (ns)')
+    axis.set_title('Input Impedance')
+    axis.legend()
 
-    # Show all plots
-    show()
-
+   # show all plots
+    plt.show()

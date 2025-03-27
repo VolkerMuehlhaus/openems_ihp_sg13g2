@@ -8,11 +8,10 @@ import modules.util_utilities as utilities
 import modules.util_simulation_setup as simulation_setup
 import modules.util_meshlines as util_meshlines
 
-from pylab import *
-from CSXCAD import ContinuousStructure
-from CSXCAD import AppCSXCAD_BIN
 from openEMS import openEMS
-from openEMS.physical_constants import *
+import numpy as np
+import matplotlib.pyplot as plt
+
 
 # Model comments
 # 
@@ -20,8 +19,7 @@ from openEMS.physical_constants import *
 # S2P output is created from "fake" reverse path data, assuming symmetry
 # Meshing: simulation_setup.setupSimulation() uses xy_mesh_function=util_meshlines.create_xy_mesh_from_polygons 
 
-# Boundaries: added PML_8 boundaries because line radiates a little bit at ~80 GHz, which creates glitch in data with PEC walls 
-# This requires air around, to make room for 8 absorbing mesh cells on each boundary.
+# With the reduced stackup SG13G2_nosub.xml, we can use PEC boundaries.
 
 
 
@@ -94,12 +92,12 @@ layernumbers.extend(simulation_ports.portlayers)
 # read geometries from GDSII, only purpose 0
 allpolygons = gds_reader.read_gds(gds_filename, layernumbers, purposelist=[0], metals_list=metals_list, preprocess=preprocess_gds, merge_polygon_size=merge_polygon_size)
 
-# calculate maximum cellsize from wavelength in diecletric
-wavelength_air = 3e8/fstop
-max_cellsize = (wavelength_air/unit)/(sqrt(materials_list.eps_max)*cells_per_wavelength) 
+# calculate maximum cellsize from wavelength in dielectric
+wavelength_air = 3e8/fstop / unit
+max_cellsize = (wavelength_air)/(np.sqrt(materials_list.eps_max)*cells_per_wavelength) 
 
 # define excitation and stop criteria and boundaries
-FDTD = openEMS(EndCriteria=exp(energy_limit/10 * log(10)))
+FDTD = openEMS(EndCriteria=np.exp(energy_limit/10 * np.log(10)))
 FDTD.SetGaussExcite( (fstart+fstop)/2, (fstop-fstart)/2 )
 FDTD.SetBoundaryCond( Boundaries )
 
@@ -108,7 +106,19 @@ FDTD.SetBoundaryCond( Boundaries )
 
 # Create simulation for port 1 and 2 excitation, return value is data path for that excitation
 excite_ports = [1]  # list of ports that are excited for this simulation run
-FDTD = simulation_setup.setupSimulation (excite_ports, simulation_ports, FDTD, materials_list, dielectrics_list, metals_list, allpolygons, max_cellsize, refined_cellsize, margin, unit, xy_mesh_function=util_meshlines.create_xy_mesh_from_polygons)
+FDTD = simulation_setup.setupSimulation (excite_ports, 
+                                         simulation_ports, 
+                                         FDTD, 
+                                         materials_list, 
+                                         dielectrics_list, 
+                                         metals_list, 
+                                         allpolygons, 
+                                         max_cellsize, 
+                                         refined_cellsize, 
+                                         margin, 
+                                         unit, 
+                                         xy_mesh_function=util_meshlines.create_xy_mesh_from_polygons)
+
 sub1_data_path = simulation_setup.runSimulation (excite_ports, FDTD, sim_path, model_basename, preview_only, postprocess_only)
 
 
@@ -122,7 +132,7 @@ if preview_only==False:
 
     # define phase function for S-parameters
     def phase(value):
-        return angle(value, deg=True) 
+        return np.angle(value, deg=True) 
 
 
     f = np.linspace(fstart,fstop,numfreq)
@@ -140,24 +150,31 @@ if preview_only==False:
     s2p_name = os.path.join(sim_path, model_basename + '.s2p')
     utilities.write_snp (np.array([[s11, s21],[s12,s22]]),f, s2p_name)
 
-    figure()
-    plot(f/1e9, dB(s11), 'k-',  linewidth=2, label='S11 [dB]')
-    grid()
-    legend()
-    xlabel('Frequency (GHz)')
-
-    figure()
-    plot(f/1e9, dB(s21), 'k-',  linewidth=2, label='S21 [dB]')
-    grid()
-    legend()
-    xlabel('Frequency (GHz)')
-
-    figure()
-    plot(f/1e9, phase(s21), 'k-', linewidth=2, label='phase S21 [degree]')
-    grid()
-    legend()
-    xlabel('Frequency (GHz)')
+    fig, axis = plt.subplots(num='Return Loss', tight_layout=True)
+    axis.plot(f/1e9, dB(s11), 'k-',  linewidth=2, label='S11 (dB)')
+    axis.grid()
+    axis.set_xmargin(0)
+    axis.set_xlabel('Frequency (GHz)')
+    axis.set_title('Return Loss')
+    axis.legend()
     
-    # Show all plots
-    show()
+    fig, axis = plt.subplots(num='Insertion Loss', tight_layout=True)
+    axis.plot(f/1e9, dB(s21), 'k-',  linewidth=2, label='S21 (dB)')
+    axis.grid()
+    axis.set_xmargin(0)
+    axis.set_xlabel('Frequency (GHz)')
+    axis.set_title('Insertion Loss')
+    axis.legend()
+
+    fig, axis = plt.subplots(num='Transmission Phase', tight_layout=True)
+    axis.plot(f/1e9, phase(s21), 'k-',  linewidth=2, label='S21 (dB)')
+    axis.grid()
+    axis.set_xmargin(0)
+    axis.set_xlabel('Frequency (GHz)')
+    axis.set_title('Transmission Phase')
+    axis.legend()
+
+    # show all plots
+    plt.show()
+
 

@@ -8,8 +8,6 @@ import modules.util_utilities as utilities
 import modules.util_simulation_setup as simulation_setup
 import modules.util_meshlines as util_meshlines
 
-from CSXCAD import ContinuousStructure
-from CSXCAD import AppCSXCAD_BIN
 from openEMS import openEMS
 import numpy as np
 import matplotlib.pyplot as plt
@@ -55,11 +53,11 @@ print('Simulation data directory: ', sim_path)
 unit = 1e-6   # geometry dimensions and all lengths unit is µm (micrometer)
 margin = 100    # distance in microns from GDSII geometry boundary to chip boundary 
 
-f_start = 200e9
-f_stop  = 300e9
+fstart = 200e9
+fstop  = 300e9
 num_freq = 401
 
-f_target = 245e9  # frequency for antenna pattern calculation
+ftarget = 245e9  # frequency for antenna pattern calculation
 
 refined_cellsize = 2.5  # mesh cell size in conductor region
 
@@ -90,7 +88,7 @@ layernumbers.extend(simulation_ports.portlayers)
 allpolygons = gds_reader.read_gds(gds_filename, layernumbers, purposelist=[0], metals_list=metals_list, preprocess=preprocess_gds, merge_polygon_size=merge_polygon_size)
 
 # calculate maximum cellsize from wavelength in dielectric
-wavelength_air = 3e8/f_stop / unit
+wavelength_air = 3e8/fstop / unit
 max_cellsize = (wavelength_air)/(np.sqrt(materials_list.eps_max)*cells_per_wavelength) 
 
 
@@ -99,7 +97,7 @@ max_cellsize = (wavelength_air)/(np.sqrt(materials_list.eps_max)*cells_per_wavel
 # Prepare simulation for port 1 excitation
 excite_ports = [1]  # list of ports that are excited for this simulation run
 FDTD = openEMS(EndCriteria=np.exp(energy_limit/10 * np.log(10)))
-FDTD.SetGaussExcite( (f_start+f_stop)/2, (f_stop-f_start)/2 )
+FDTD.SetGaussExcite( (fstart+fstop)/2, (fstop-fstart)/2 )
 FDTD.SetBoundaryCond( Boundaries )
 
 FDTD = simulation_setup.setupSimulation(
@@ -119,7 +117,7 @@ FDTD = simulation_setup.setupSimulation(
     )
 
 # add nf2ff box for antenna pattern calculation
-nf2ff_box = FDTD.CreateNF2FFBox(opt_resolution = [max_cellsize]*3, frequency = [f_target])
+nf2ff_box = FDTD.CreateNF2FFBox(opt_resolution = [max_cellsize]*3, frequency = [ftarget])
 
 # run simulation
 sub1_data_path = simulation_setup.runSimulation(excite_ports, FDTD, sim_path, model_basename, preview_only, postprocess_only)
@@ -135,7 +133,7 @@ def dBm(value, factor=20):
 
 # evaluate results for 1-port simulation
 if not preview_only:  
-    f = np.linspace(f_start, f_stop, num_freq)
+    f = np.linspace(fstart, fstop, num_freq)
 
     s11 = utilities.calculate_Sij(1, 1, f, sim_path, simulation_ports)
     s11_dB = dB(s11)
@@ -157,16 +155,16 @@ if not preview_only:
     
     theta = np.arange(-180.0, 180.0, 2.0)
     phi   = [0., 90.]
-    nf2ff_res = nf2ff_box.CalcNF2FF(sub1_data_path, f_target, theta, phi)
+    nf2ff_res = nf2ff_box.CalcNF2FF(sub1_data_path, ftarget, theta, phi)
 
     # INPUT POWER values into feed port at evaluation frequency
     # P_acc = accepted power (incoming - reflected)
     # P_inc = incident power (incoming), regardless of reflection
     
     # get accepted power into port
-    Pin_accepted = np.interp(f_target, f, CSX_port1.P_acc)
+    Pin_accepted = np.interp(ftarget, f, CSX_port1.P_acc)
     # get incident power
-    P_incident = np.interp(f_target, f, CSX_port1.P_inc)
+    P_incident = np.interp(ftarget, f, CSX_port1.P_inc)
 
     # get total radiated power at nf2ff frequency 
     Prad_total = nf2ff_res.Prad[0]
@@ -189,7 +187,7 @@ if not preview_only:
     gain_abs_yz = directivity_abs_yz + radiation_efficiency_dB
 
     # display radiated power and directivity
-    print(f"Antenna parameters at {f_target/1e9:g} GHz:")
+    print(f"Antenna parameters at {ftarget/1e9:g} GHz:")
     print(f"    Incident power P_incident  =  {P_incident:.3e} W  =  {dBm(P_incident, 10):g} dBm")
     print(f"    Accepted power Pin_accepted  =  {Pin_accepted:.3e} W  =  {dBm(Pin_accepted, 10):g} dBm")
     print(f"    Radiated power Prad_total  =  {Prad_total:.3e} W  =  {dBm(Prad_total, 10):g} dBm")
@@ -205,7 +203,7 @@ if not preview_only:
     axis.set_xmargin(0)
     axis.set_xlabel('Theta (deg)')
     axis.set_ylabel('Directivity (dBi)')
-    axis.set_title(f'Directivity at Frequency: {f_target/1e9:g} GHz')
+    axis.set_title(f'Directivity at Frequency: {ftarget/1e9:g} GHz')
     axis.legend()
 
     fig, axis = plt.subplots(num="Gain", tight_layout=True)
@@ -215,7 +213,7 @@ if not preview_only:
     axis.set_xmargin(0)
     axis.set_xlabel('Theta (deg)')
     axis.set_ylabel('Gain (dBi)')
-    axis.set_title(f'Gain at Frequency: {f_target/1e9:g} GHz')
+    axis.set_title(f'Gain at Frequency: {ftarget/1e9:g} GHz')
     axis.legend()
 
     # show all plots

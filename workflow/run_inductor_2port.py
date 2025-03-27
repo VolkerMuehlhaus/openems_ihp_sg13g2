@@ -1,4 +1,3 @@
-
 import os
 import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), 'modules')))
@@ -9,12 +8,9 @@ import modules.util_utilities as utilities
 import modules.util_simulation_setup as simulation_setup
 import modules.util_meshlines as util_meshlines
 
-import os
-from pylab import *
-from CSXCAD import ContinuousStructure
-from CSXCAD import AppCSXCAD_BIN
 from openEMS import openEMS
-from openEMS.physical_constants import *
+import numpy as np
+import matplotlib.pyplot as plt
 
 # Model comments
 # Simple inductor model, 2 port model with two via ports to substrate, full two port simulation
@@ -89,9 +85,9 @@ layernumbers.extend(simulation_ports.portlayers)
 allpolygons = gds_reader.read_gds(gds_filename, layernumbers, purposelist=[0], metals_list=metals_list, preprocess=preprocess_gds, merge_polygon_size=merge_polygon_size)
 
 
-# calculate maximum cellsize from wavelength in diecletric
-wavelength_air = 3e8/fstop
-max_cellsize = (wavelength_air/unit)/(sqrt(materials_list.eps_max)*cells_per_wavelength) 
+# calculate maximum cellsize from wavelength in dielectric
+wavelength_air = 3e8/fstop / unit
+max_cellsize = (wavelength_air)/(np.sqrt(materials_list.eps_max)*cells_per_wavelength) 
 
 
 ########### create model, run and post-process ###########
@@ -100,10 +96,22 @@ max_cellsize = (wavelength_air/unit)/(sqrt(materials_list.eps_max)*cells_per_wav
 # Create simulation for port 1 and 2 excitation, return value is list of data paths, one for each excitation
 data_paths = []
 for excite_ports in [[1],[2]]:  # list of ports that are excited one after another
-    FDTD = openEMS(EndCriteria=exp(energy_limit/10 * log(10)))
+    FDTD = openEMS(EndCriteria=np.exp(energy_limit/10 * np.log(10)))
     FDTD.SetGaussExcite( (fstart+fstop)/2, (fstop-fstart)/2 )
     FDTD.SetBoundaryCond( Boundaries )
-    FDTD = simulation_setup.setupSimulation (excite_ports, simulation_ports, FDTD, materials_list, dielectrics_list, metals_list, allpolygons, max_cellsize, refined_cellsize, margin, unit, xy_mesh_function=util_meshlines.create_xy_mesh_from_polygons)
+    FDTD = simulation_setup.setupSimulation (excite_ports, 
+                                             simulation_ports, 
+                                             FDTD, 
+                                             materials_list, 
+                                             dielectrics_list, 
+                                             metals_list, 
+                                             allpolygons, 
+                                             max_cellsize, 
+                                             refined_cellsize, 
+                                             margin, 
+                                             unit, 
+                                             xy_mesh_function=util_meshlines.create_xy_mesh_from_polygons)
+
     data_paths.append(simulation_setup.runSimulation (excite_ports, FDTD, sim_path, model_basename, preview_only, postprocess_only))
 
 
@@ -117,7 +125,7 @@ if preview_only==False:
 
     # define phase function for S-parameters
     def phase(value):
-        return angle(value, deg=True) 
+        return np.angle(value, deg=True) 
 
     f = np.linspace(fstart,fstop,numfreq)
 
@@ -149,7 +157,7 @@ if preview_only==False:
     # print some inductor data
     # get series L and series R at frequency of interest
     targetfreq = 10e9
-    findex = where (f>=targetfreq)[0]
+    findex = np.where (f>=targetfreq)[0]
     findex = findex.item(0)
 
     print('\nDifferential inductor parameters')
@@ -165,38 +173,44 @@ if preview_only==False:
 
     print('\nStarting plots')
 
-    figure()
-    plot(f/1e9, dB(s11), 'k-',  linewidth=2, label='S11 [dB]')
-    plot(f/1e9, dB(s22), 'r--',  linewidth=2, label='S22 [dB]')
-    grid()
-    legend()
-    xlabel('Frequency (GHz)')
-
-    figure()
-    plot(f/1e9, dB(s21), 'k-',  linewidth=2, label='S21 [dB]')
-    plot(f/1e9, dB(s12), 'r--',  linewidth=2, label='S12 [dB]')
-    grid()
-    legend()
-    xlabel('Frequency (GHz)')
-
-
-    figure()
-    plot(f/1e9, Ldiff*1e9, 'k-', linewidth=2, label='Lseries [nH]')
-    ylim(0, 10)
-    xlim(0, fstop/1e9)
-    grid()
-    legend()
-    xlabel('Frequency (GHz)')
+        
+    fig, axis = plt.subplots(num="Return Loss", tight_layout=True)
+    axis.plot(f/1e9, dB(s11), 'k-',  linewidth=2, label='S11 (dB)')
+    axis.plot(f/1e9, dB(s22), 'r--', linewidth=2, label='S22 (dB)')
+    axis.grid()
+    axis.set_xmargin(0)
+    axis.set_xlabel('Frequency (GHz)')
+    axis.set_title("Return Loss")
+    axis.legend()
     
-    figure()
-    plot(f/1e9, Qdiff, 'k-', linewidth=2, label='Q factor')
-    ylim(0, 30)
-    xlim(0, fstop/1e9)
-    grid()
-    legend()
-    xlabel('Frequency (GHz)')
+    fig, axis = plt.subplots(num="Insertion Loss", tight_layout=True)
+    axis.plot(f/1e9, dB(s21), 'k-',  linewidth=2, label='S21 (dB)')
+    axis.plot(f/1e9, dB(s12), 'r--', linewidth=2, label='S12 (dB)')
+    axis.grid()
+    axis.set_xmargin(0)
+    axis.set_xlabel('Frequency (GHz)')
+    axis.set_title("Insertion Loss")
+    axis.legend()
+
+    fig, axis = plt.subplots(num="Inductance", tight_layout=True)
+    axis.plot(f/1e9, Ldiff*1e9, 'k-',  linewidth=2, label='Lseries [nH]')
+    axis.grid()
+    axis.set_xmargin(0)
+    axis.set_ylim([0, 10])
+    axis.set_xlabel('Frequency (GHz)')
+    axis.set_title("Inductance")
+    axis.legend()
 
 
-    # Show all plots
-    show()
+    fig, axis = plt.subplots(num="Q factor", tight_layout=True)
+    axis.plot(f/1e9, Qdiff, 'k-',  linewidth=2, label='Lseries [nH]')
+    axis.grid()
+    axis.set_xmargin(0)
+    axis.set_ylim([0, 30])
+    axis.set_xlabel('Frequency (GHz)')
+    axis.set_title("Q factor")
+    axis.legend()
+
+   # show all plots
+    plt.show()
 
