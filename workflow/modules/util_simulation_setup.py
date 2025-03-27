@@ -100,9 +100,11 @@ def addGeometry_to_CSX (CSX, excite_portnumbers,simulation_ports,FDTD, materials
                     if material.color != "":
                         CSX_material.SetColor('#' + material.color, 255)  # transparency value 255 = solid
 
-                # add Polygon to CSX
-                CSX_material.AddLinPoly(priority=200, points=poly.pts, norm_dir ='z', elevation=metal.zmin, length=metal.thickness)
-
+                # add Polygon to CSX 
+                # remember value for MA meshing algorithm, which works on CSX polygons rather than our GDS polygons
+                p = CSX_material.AddLinPoly(priority=200, points=poly.pts, norm_dir ='z', elevation=metal.zmin, length=metal.thickness)
+                poly.CSXpoly = p
+                
     return CSX, CSX_materials_list                    
 
 
@@ -278,7 +280,7 @@ def setupSimulation (excite_portnumbers,simulation_ports, FDTD, materials_list, 
     return FDTD
 
 
-def runSimulation (excite_portnumbers, FDTD, sim_path, model_basename, preview_only, postprocess_only):
+def runSimulation (excite_portnumbers, FDTD, sim_path, model_basename, preview_only, postprocess_only, force_simulation=False):
  
     excitation_path = utilities.get_excitation_path (sim_path, excite_portnumbers)
     
@@ -298,16 +300,60 @@ def runSimulation (excite_portnumbers, FDTD, sim_path, model_basename, preview_o
                 sys.exit(1)
 
     if not (preview_only or postprocess_only):  # start simulation 
-        print('Starting FDTD simulation for excitation ', str(excite_portnumbers))
-        try:
-            FDTD.Run(excitation_path)  # DO NOT SPECIFY COMMAND LINE OPTIONS HERE! That will fail for repeated runs with multiple excitations.
-            print('FDTD simulation completed successfully for excitation ', str(excite_portnumbers))
-        except AssertionError as e:
-            print('[ERROR] AssertionError during FDTD simulation: ', e)
-            sys.exit(1)
+        # Check if we can read a hash file from the result folder
+        existing_data_hash = get_hash_from_data_folder(excitation_path)
+
+        # Create hash of newly created CSX file, we will store that to result folder when simulation is finished.
+        # This will enable checking for pre-existing data of the exact same model.
+        XML_hash = calculate_sha256_of_file(CSX_file)
+
+        if (existing_data_hash != XML_hash) or force_simulation:
+            # Hash is different or not found, or simulation is forced
+            print('Starting FDTD simulation for excitation ', str(excite_portnumbers))
+            try:
+
+                FDTD.Run(excitation_path)  # DO NOT SPECIFY COMMAND LINE OPTIONS HERE! That will fail for repeated runs with multiple excitations.
+                print('FDTD simulation completed successfully for excitation ', str(excite_portnumbers))
+                # Now that simulation created output data, write the hash of the underlying XML model. This will help to identify existing data for this model.
+                write_hash_to_data_folder(excitation_path, XML_hash)
+            except AssertionError as e:
+                print('[ERROR] AssertionError during FDTD simulation: ', e)
+                sys.exit(1)
+        else:
+            print('Data for this model already exists, skipping simulation!')
+            print('To force re-simulation, add parameter "force_simulation=True" to the runSimulation() call.')
 
 
     return excitation_path
 
 
 ######### end of function createSimulation ()  ##########
+
+# Utility functions for hash file.
+# By creating and storing a hash of CSX file to the result folder when simulation is finished,
+# we can identify pre-existing data of the exact same model. In this case, we can skip simulation.
+
+def calculate_sha256_of_file(filename):
+    import hashlib
+    sha256_hash = hashlib.sha256()
+    with open(filename, 'rb') as f:
+        for byte_block in iter(lambda: f.read(4096), b""):
+            sha256_hash.update(byte_block)
+
+    return sha256_hash.hexdigest()
+
+def write_hash_to_data_folder (excitation_path, hash_value):
+    filename = os.path.join(excitation_path, 'simulation_model.hash')
+    hashfile = open(filename, 'w')
+    hashfile.write(str(hash_value))
+    hashfile.close() 
+
+def get_hash_from_data_folder (excitation_path):
+    filename = os.path.join(excitation_path, 'simulation_model.hash')
+    hashvalue = ''
+    if os.path.isfile(filename):
+        hashfile = open(filename, "r")
+        hashvalue = hashfile.read()
+        hashfile.close()
+    return hashvalue
+
