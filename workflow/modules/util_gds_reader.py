@@ -23,7 +23,8 @@ class gds_polygon:
     self.layernum = layernum
     self.is_port = False
     self.is_via = False
-
+    self.CSXpoly = None
+    
   def add_vertex (self, x,y):
     self.pts_x = np.append(self.pts_x, x)
     self.pts_y = np.append(self.pts_y, y)
