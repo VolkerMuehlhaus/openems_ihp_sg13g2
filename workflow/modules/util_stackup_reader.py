@@ -104,7 +104,7 @@ class dielectric_layers_list:
     for dielectric in self.dielectrics:
       if dielectric.name ==  name_to_find:
         found = dielectric
-    return dielectric    
+    return found    
 
 
 
