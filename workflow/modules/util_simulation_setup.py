@@ -24,7 +24,6 @@ import util_gds_reader as gds_reader
 import util_utilities as utilities
 import util_meshlines
 
-from pylab import *
 from CSXCAD import ContinuousStructure
 from CSXCAD import AppCSXCAD_BIN
 from openEMS import openEMS
@@ -86,6 +85,15 @@ class all_simulation_ports:
   
   def get_port_by_number (self, portnum):
       return self.ports[portnum-1] 
+  
+  def apply_layernumber_offset (self, offset):
+      newportlayers = []    
+      for port in self.ports:
+          port.source_layernum = port.source_layernum + offset
+          newportlayers.append(port.source_layernum)
+      self.portlayers = newportlayers        
+          
+      
 
 
 def addGeometry_to_CSX (CSX, excite_portnumbers,simulation_ports,FDTD, materials_list, dielectrics_list, metals_list, allpolygons):
@@ -130,29 +138,33 @@ def addDielectrics_to_CSX (CSX, CSX_materials_list,  materials_list, dielectrics
 
     for dielectric in dielectrics_list.dielectrics:
         # get CSX material object for this dielectric layers material name
-        materialname = dielectric.material
-        material = materials_list.get_by_name(materialname)
+        materialname = dielectric.name
+        material = materials_list.get_by_name(dielectric.material)
+        if material is None:
+            print('ERROR: Material ', materialname, 'for dielectric layer ', dielectric.name, ' is not defined in stackup file. ')
+            exit(1)
         
         if materialname in CSX_materials_list.keys():
-            # already defined in CSX materials, was used before
-            CSX_material = CSX_materials_list[materialname]
-        else:
-            # create CSX material, was not used before
-            CSX_material = CSX.AddMaterial(material.name, kappa=material.sigma, epsilon=material.eps)
-            CSX_materials_list.update({material.name: CSX_material})
-            # set color for IHP layers, if available
-            if material.color != "":
-                CSX_material.SetColor('#' + material.color, 20)  # transparency value 20, very transparent
+            # create new material per layer, so that we can enable/disable them in appCSXCAD when used more than once
+            materialname = materialname + '_1'
+            
+        # create CSX material
+        CSX_material = CSX.AddMaterial(materialname, kappa=material.sigma, epsilon=material.eps)
+        CSX_materials_list.update({materialname: CSX_material})
+        # set color for IHP layers, if available
+        if material.color != "":
+            CSX_material.SetColor('#' + material.color, 20)  # transparency value 20, very transparent
 
         # now that we have a CSX material, add the dielectric body (substrate, oxide etc)
-            CSX_material.AddBox(priority=10, start=[allpolygons.xmin - margin, allpolygons.ymin - margin, dielectric.zmin], stop=[allpolygons.xmax + margin, allpolygons.ymax + margin, dielectric.zmax])
+            bbox_xmin, bbox_xmax, bbox_ymin, bbox_ymax = allpolygons.bounding_box.get_layer_bounding_box(dielectric.gdsboundary)
+            CSX_material.AddBox(priority=10, start=[bbox_xmin - margin, bbox_ymin - margin, dielectric.zmin], stop=[bbox_xmax + margin, bbox_ymax + margin, dielectric.zmax])
 
     # Optional: add a layer of PEC with zero thickness below stackup
     # This is useful if we have air layer around for absorbing boundaries (antenna simulation)
     if addPEC:
         PEC = CSX.AddMetal( 'PEC_bottom' )
-        PEC.SetColor('#ffffff', 50) 
-        PEC.AddBox(priority=255, start=[allpolygons.xmin - margin, allpolygons.ymin - margin, 0], stop=[allpolygons.xmax + margin, allpolygons.ymax + margin, 0])
+        PEC.SetColor("#ffffff", 50) 
+        PEC.AddBox(priority=255, start=[bbox_xmin - margin, bbox_ymin - margin, 0], stop=[bbox_xmax + margin, bbox_ymax + margin, 0])
 
     return CSX, CSX_materials_list  
 
@@ -170,74 +182,74 @@ def addPorts_to_CSX (CSX, excite_portnumbers,simulation_ports,FDTD, materials_li
         metal = metals_list.getbylayernumber (poly.layernum)
         if metal == None: # this layer does not exist in XML stackup
             # found a layer that is not defined in stackup from XML, check if used for ports
-            if poly.layernum in simulation_ports.portlayers:
+
+            # find port definition for this GDSII source layer number
+            port = simulation_ports.get_port_by_layernumber(poly.layernum)
+            if port is not None:
                 # mark polygon for special handling in meshing
                 poly.is_port = True 
 
-                # find port definition for this GDSII source layer number
-                port = simulation_ports.get_port_by_layernumber(poly.layernum)
-                if port != None:
-                    portnum = port.portnumber
-                    port_direction = port.direction
-                    port_Z0 = port.port_Z0
-                    if portnum in excite_portnumbers: # list of excited ports, this can be more than one port number for GSG with composite ports
-                        voltage = port.voltage        # only apply source voltage to ports that are excited in this simulation run
+                portnum = port.portnumber
+                port_direction = port.direction
+                port_Z0 = port.port_Z0
+                if portnum in excite_portnumbers: # list of excited ports, this can be more than one port number for GSG with composite ports
+                    voltage = port.voltage        # only apply source voltage to ports that are excited in this simulation run
+                else:
+                    voltage = 0                   # passive port in this simulation run
+                if port.reversed_direction:       # port direction changes polarity
+                    xmin = poly.xmax
+                    xmax = poly.xmin
+                    ymin = poly.ymax
+                    ymax = poly.ymin
+                else:        
+                    xmin = poly.xmin
+                    xmax = poly.xmax
+                    ymin = poly.ymin
+                    ymax = poly.ymax
+                
+                # port z coordinates are different between in-plane ports and via ports
+                if port.target_layername != None:
+                    # in-plane port   
+                    port_metal = metals_list.getbylayername(port.target_layername)
+                    zmin = port_metal.zmin
+                    zmax = port_metal.zmax
+                else:
+                    # via port 
+                    if port.from_layername == 'GND': # special case bottom of simulation box
+                        zmin_from = 0
+                        zmax_from = 0
                     else:
-                        voltage = 0                   # passive port in this simulation run
-                    if port.reversed_direction:       # port direction changes polarity
-                        xmin = poly.xmax
-                        xmax = poly.xmin
-                        ymin = poly.ymax
-                        ymax = poly.ymin
-                    else:        
-                        xmin = poly.xmin
-                        xmax = poly.xmax
-                        ymin = poly.ymin
-                        ymax = poly.ymax
-                    
-                    # port z coordinates are different between in-plane ports and via ports
-                    if port.target_layername != None:
-                        # in-plane port   
-                        port_metal = metals_list.getbylayername(port.target_layername)
-                        zmin = port_metal.zmin
-                        zmax = port_metal.zmax
-                    else:
-                       # via port 
-                       if port.from_layername == 'GND': # special case bottom of simulation box
-                         zmin_from = 0
-                         zmax_from = 0
-                       else:
-                         from_metal = metals_list.getbylayername(port.from_layername)
-                         if from_metal==None:
+                        from_metal = metals_list.getbylayername(port.from_layername)
+                        if from_metal==None:
                             print('[ERROR] Invalid layer ' , port.from_layername, ' in port definition, not found in XML stackup file!')
                             sys.exit(1)                             
-                         zmin_from  = from_metal.zmin
-                         zmax_from  = from_metal.zmax
-                       
-                       if port.to_layername == 'GND': # special case bottom of simulation box
-                         zmin_to = 0
-                         zmax_to = 0
-                       else:
-                         to_metal   = metals_list.getbylayername(port.to_layername)
-                         if to_metal==None:
+                        zmin_from  = from_metal.zmin
+                        zmax_from  = from_metal.zmax
+                    
+                    if port.to_layername == 'GND': # special case bottom of simulation box
+                        zmin_to = 0
+                        zmax_to = 0
+                    else:
+                        to_metal   = metals_list.getbylayername(port.to_layername)
+                        if to_metal==None:
                             print('[ERROR] Invalid layer ' , port.to_layername, ' in port definition, not found in XML stackup file!')
                             sys.exit(1)                             
-                         zmin_to    = to_metal.zmin
-                         zmax_to    = to_metal.zmax
-                       
-                       # if necessary, swap from and to position
-                       if zmin_from < zmin_to:
-                           # from layer is lower layer
-                           zmin = zmax_from
-                           zmax = zmin_to
-                       else:    
-                           # to layer is lower layer
-                           zmin = zmax_to
-                           zmax = zmin_from
+                        zmin_to    = to_metal.zmin
+                        zmax_to    = to_metal.zmax
+                    
+                    # if necessary, swap from and to position
+                    if zmin_from < zmin_to:
+                        # from layer is lower layer
+                        zmin = zmax_from
+                        zmax = zmin_to
+                    else:    
+                        # to layer is lower layer
+                        zmin = zmax_to
+                        zmax = zmin_from
 
-                    CSX_port = FDTD.AddLumpedPort(portnum, port_Z0, [xmin, ymin, zmin], [xmax, ymax, zmax], port_direction, voltage, priority=150)
-                    # store CSX_port in the port object, for evaluation later
-                    port.set_CSXport(CSX_port)
+                CSX_port = FDTD.AddLumpedPort(portnum, port_Z0, [xmin, ymin, zmin], [xmax, ymax, zmax], port_direction, voltage, priority=150)
+                # store CSX_port in the port object, for evaluation later
+                port.set_CSXport(CSX_port)
                     
 
 
@@ -271,7 +283,7 @@ def setupSimulation (excite_portnumbers,simulation_ports, FDTD, materials_list, 
 
     # add geometries and return list of used materials
     CSX, CSX_materials_list = addGeometry_to_CSX (CSX, excite_portnumbers,simulation_ports,FDTD, materials_list, dielectrics_list, metals_list, allpolygons)
-    CSX, CSX_materials_list = addDielectrics_to_CSX (CSX, CSX_materials_list,  materials_list, dielectrics_list, allpolygons, margin, addPEC=(air_around>0))
+    CSX, CSX_materials_list = addDielectrics_to_CSX (CSX, CSX_materials_list,  materials_list, dielectrics_list, allpolygons, margin, addPEC=False)
 
     # add ports
     CSX  = addPorts_to_CSX (CSX, excite_portnumbers,simulation_ports,FDTD, materials_list, dielectrics_list, metals_list, allpolygons)
@@ -312,7 +324,14 @@ def runSimulation (excite_portnumbers, FDTD, sim_path, model_basename, preview_o
         if 1 in excite_portnumbers:  # only for first port excitation
             print('Starting AppCSXCAD 3D viewer with file: \n', CSX_file)
             print('Close AppCSXCAD to continue or press <Ctrl>-C to abort')
-            ret = os.system(AppCSXCAD_BIN + ' "{}"'.format(CSX_file))
+
+            # for Linux, send warningas and errors to nowhere, so that we don't trash console with vtk warnings
+            if os.name == 'posix':
+                suffix = ' 2>/dev/null'
+            else:
+                suffix = ''    
+
+            ret = os.system(AppCSXCAD_BIN + ' "{}"'.format(CSX_file) + suffix)
             if ret != 0:
                 print('[ERROR] AppCSXCAD failed to launch. Exit code: ', ret)
                 sys.exit(1)

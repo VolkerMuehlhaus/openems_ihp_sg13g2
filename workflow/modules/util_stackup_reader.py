@@ -87,6 +87,7 @@ class dielectric_layer:
     self.zmax = 0
     self.is_top = False
     self.is_bottom = False
+    self.gdsboundary = data.get("Boundary")  # optional entry in stackup file
 
   def __str__ (self):
     # string representation 
@@ -123,6 +124,17 @@ class dielectric_layers_list:
         found = dielectric
     return found    
 
+  def get_boundary_layers (self):
+    # For substrates where Boundary is specified in dielectric layers, return a list of those layers 
+    # This is required for the next step, GDSII reader, which needs to know the layers to read. 
+    boundary_layer_list = []
+    for dielectric in self.dielectrics:
+      if dielectric.gdsboundary is not None:
+        value = int(dielectric.gdsboundary)
+        if value not in boundary_layer_list:
+          boundary_layer_list.append(value) 
+    return boundary_layer_list
+  
 
 
 # -------------------- conductor layers (metal and via) ---------------------------
@@ -202,7 +214,6 @@ class metal_layers_list:
     for metal in self.metals:
       metal.zmin = metal.zmin + offset
       metal.zmax = metal.zmax + offset
-
 
 
 # ----------- parse substrate file, get materials from list created before -----------
