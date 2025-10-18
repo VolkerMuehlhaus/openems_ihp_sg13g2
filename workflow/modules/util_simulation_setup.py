@@ -112,23 +112,57 @@ def addGeometry_to_CSX (CSX, excite_portnumbers,simulation_ports,FDTD, materials
         if all_assigned != None:
             for metal in all_assigned:
                 materialname = metal.material
-                # check for openEMS CSX material object that belongs to this material name
-                if materialname in CSX_materials_list.keys():
-                    # already in list, was used before
-                    CSX_material = CSX_materials_list[materialname]
-                else:
-                    # create CSX material, was not used before
-                    material = materials_list.get_by_name(materialname)
-                    CSX_material = CSX.AddMaterial(material.name, kappa=material.sigma, epsilon=material.eps)
-                    CSX_materials_list.update({material.name: CSX_material})
-                    # set color for IHP layers, if available, so that we see that color in AppCSXCAD 3D view
-                    if material.color != "":
-                        CSX_material.SetColor('#' + material.color, 255)  # transparency value 255 = solid
+                
+                # check for stackup defintions that are not compatible with this workflow
+                if not metal.is_sheet:
+                    # check for openEMS CSX material object that belongs to this material name
+                    if materialname in CSX_materials_list.keys():
+                        # already in list, was used before
+                        CSX_material = CSX_materials_list[materialname]
+                    else:
+                        # create CSX material, was not used before
+                        material = materials_list.get_by_name(materialname)
+                        CSX_material = CSX.AddMaterial(material.name, kappa=material.sigma, epsilon=material.eps)
+                        CSX_materials_list.update({material.name: CSX_material})
+                        # set color for IHP layers, if available, so that we see that color in AppCSXCAD 3D view
+                        if material.color != "":
+                            CSX_material.SetColor('#' + material.color, 255)  # transparency value 255 = solid
 
-                # add Polygon to CSX 
-                # remember value for MA meshing algorithm, which works on CSX polygons rather than our GDS polygons
-                p = CSX_material.AddLinPoly(priority=200, points=poly.pts, norm_dir ='z', elevation=metal.zmin, length=metal.thickness)
-                poly.CSXpoly = p
+                    # add Polygon to CSX 
+                    # remember value for MA meshing algorithm, which works on CSX polygons rather than our GDS polygons
+                    p = CSX_material.AddLinPoly(priority=200, points=poly.pts, norm_dir ='z', elevation=metal.zmin, length=metal.thickness)
+                    poly.CSXpoly = p
+
+                else:
+                    print('Sheet material assigned to layer', metal.name)
+                    # create a unique material defintion for this layer
+
+                    # get thickness of layer definition
+                    thickness = metal.zmax - metal.zmin # should always be zero for sheet
+
+                    # get material type
+                    material = materials_list.get_by_name(materialname)
+
+                    if material.type == 'RESISTOR' and material.Rs>0 :
+                        # define conducting sheet with sigma calculated from material Rs value and thickness from layer 
+                        if thickness==0:
+                            # thickness not specified in stackup
+                            thickness=1e-6 # assume 1 micron for loss calculation, we then calculate Sigma to obtain desired Rs
+                        sigma = 1/(thickness*material.Rs)  
+                        CSX_material = CSX.AddConductingSheet(metal.name + '_' + material.name, conductivity=sigma, thickness=thickness)
+                        CSX_materials_list.update({material.name: CSX_material})
+                    else:
+                        print('WARNING: Invalid material assigned to layer ', metal.name)
+                        print(str(material))    
+                        print('=====> MATERIAL IS REPLACED BY PEC (PERFECT CONDUCTOR) <=====')
+                        CSX_material = CSX.AddMaterial('PEC_' + material.name)
+                        CSX_materials_list.update({material.name: CSX_material})
+
+                    # add Polygon to CSX but no thickness
+                    # remember value for MA meshing algorithm, which works on CSX polygons rather than our GDS polygons
+                    p = CSX_material.AddLinPoly(priority=200, points=poly.pts, norm_dir ='z', elevation=metal.zmin, length=0)
+                    poly.CSXpoly = p
+
                 
     return CSX, CSX_materials_list                    
 
