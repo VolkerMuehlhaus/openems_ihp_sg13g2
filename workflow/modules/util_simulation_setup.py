@@ -93,7 +93,131 @@ class all_simulation_ports:
           newportlayers.append(port.source_layernum)
       self.portlayers = newportlayers        
           
-      
+
+
+       
+  '''
+    openEMS dump types:
+
+    * 0  : for E-field time-domain dump (default)
+    * 1  : for H-field time-domain dump
+    * 2  : for electric current time-domain dump
+    * 3  : for total current density (rot(H)) time-domain dump
+
+    * 10 : for E-field frequency-domain dump
+    * 11 : for H-field frequency-domain dump
+    * 12 : for electric current frequency-domain dump
+    * 13 : for total current density (rot(H)) frequency-domain dump
+
+    * 20 : local SAR frequency-domain dump
+    * 21 :  1g averaging SAR frequency-domain dump
+    * 22 : 10g averaging SAR frequency-domain dump
+
+    * 29 : raw data needed for SAR calculations (electric field FD, cell volume, conductivity and density)
+
+    openEMS dump modes:
+
+    * 0 : no-interpolation
+    * 1 : node-interpolation (default, see warning below)
+    * 2 : cell-interpolation (see warning below)
+
+    openEMS file types:
+
+    * 0 : vtk-file  (default)
+    * 1 : hdf5-file (easier to read by python, using h5py)
+'''
+
+
+
+class dump():
+  def __init__ (self, name, file_type, dump_type, source_layernum, from_layername, to_layername, offset_top, offset_bottom, sub_sampling):
+      self.name = name
+
+      # allow string names for filetype also
+      if file_type == 'vtk': 
+          file_type=0
+      elif file_type == 'hdf5': 
+          file_type=1
+
+      if file_type not in [0,1]:
+        print('Invalid dump filetype specified for ', name)
+        exit(1)
+
+      self.file_type = file_type
+      self.source_layernum = source_layernum
+      self.from_layername=from_layername
+      self.to_layername=to_layername
+      self.offset_top = offset_top
+      self.offset_bottom = offset_bottom
+      self.subsampling = sub_sampling
+
+
+class time_dump(dump):
+  def __init__ (self, name, file_type, dump_type, source_layernum, from_layername, to_layername, offset_top, offset_bottom, sub_sampling):
+      super().__init__(name, file_type, dump_type, source_layernum, from_layername, to_layername, offset_top, offset_bottom, sub_sampling)
+
+      # allow string names for dumptype also
+      if dump_type == 'E' or dump_type == 'Et': 
+          dump_type=0
+      elif dump_type == 'H' or dump_type == 'Ht': 
+          dump_type=1
+      elif dump_type == 'J' or dump_type == 'Jt': 
+          dump_type=2
+      elif dump_type == 'rotH' or dump_type == 'rotHt': 
+          dump_type=3
+
+      self.dump_type = dump_type
+
+      if dump_type not in [0,1,2,3]:
+        print('Invalid dumptype specified for time domain dump ', name)
+        exit(1)
+
+
+class frequency_dump(dump):
+  def __init__ (self, name, frequency, file_type, dump_type, source_layernum, from_layername='', to_layername='', offset_top=0, offset_bottom=0, sub_sampling=[1,1,1]):
+      super().__init__(name, file_type, dump_type, source_layernum, from_layername, to_layername, offset_top, offset_bottom, sub_sampling)
+      self.frequency = frequency
+
+      # allow string names for dumptype also
+      if dump_type == 'E' or dump_type == 'Ef': 
+          dump_type=10
+      elif dump_type == 'H' or dump_type == 'Hf': 
+          dump_type=11
+      elif dump_type == 'J' or dump_type == 'Jf': 
+          dump_type=12
+      elif dump_type == 'rotH' or dump_type == 'rotHf': 
+          dump_type=13
+
+      self.dump_type = dump_type
+
+      if dump_type not in [10,11,12,13]:
+        print('Invalid dumptype specified for frequency domain dump ', name)
+        exit(1)
+
+
+
+
+class all_field_dumps():
+  def __init__ (self):
+      self.field_dumps = []
+      self.dumplayers  = []
+      self.count = 0
+
+  def add_dump (self, dump):
+      self.field_dumps.append(dump)
+      self.count = len(self.field_dumps)
+      self.dumplayers.append(dump.source_layernum)
+
+  def add_frequency_dump (self, name, frequency, file_type, dump_type, source_layernum, from_layername='', to_layername='', offset_top=0, offset_bottom=0, sub_sampling=[1,1,1]):
+      self.field_dumps.append(frequency_dump(name=name, frequency=frequency, file_type=file_type, dump_type=dump_type, source_layernum=source_layernum, from_layername=from_layername, to_layername=to_layername, offset_top=offset_top, offset_bottom=offset_bottom, sub_sampling=sub_sampling))
+      self.count = len(self.field_dumps)      
+      self.dumplayers.append(source_layernum)
+
+  def add_time_dump (self, name, file_type, dump_type, source_layernum, from_layername='', to_layername='', offset_top=0, offset_bottom=0, sub_sampling=[1,1,1]):
+      self.field_dumps.append(time_dump(name=name, file_type=file_type, dump_type=dump_type, source_layernum=source_layernum, from_layername=from_layername, to_layername=to_layername, offset_top=offset_top, offset_bottom=offset_bottom, sub_sampling=sub_sampling))
+      self.count = len(self.field_dumps)      
+      self.dumplayers.append(source_layernum)
+
 
 
 def addGeometry_to_CSX (CSX, excite_portnumbers,simulation_ports,FDTD, materials_list, dielectrics_list, metals_list, allpolygons):
@@ -291,8 +415,6 @@ def addPorts_to_CSX (CSX, excite_portnumbers,simulation_ports,FDTD, materials_li
 
 
 
-
-
 def addMesh_to_CSX (CSX, allpolygons, dielectrics_list, metals_list, refined_cellsize, max_cellsize, margin, air_around, unit, z_mesh_function, xy_mesh_function):
 # Add mesh using default method
     mesh = CSX.GetGrid()
@@ -306,8 +428,33 @@ def addMesh_to_CSX (CSX, allpolygons, dielectrics_list, metals_list, refined_cel
     return mesh
 
 
+def addFielddumps_to_CSX (FDTD, CSX, all_field_dumps, allpolygons, metals_list):
+# Add field dumps for time and frequency domain and nf2ff, if any
+    if all_field_dumps.count > 0:
+        for field_dump in all_field_dumps.field_dumps:
+            if isinstance(field_dump, time_dump):
+                Dump = CSX.AddDump(field_dump.name, 
+                                     file_type=field_dump.file_type, 
+                                     dump_type=field_dump.dump_type, 
+                                     sub_sampling=field_dump.subsampling)
 
-def setupSimulation (excite_portnumbers,simulation_ports, FDTD, materials_list, dielectrics_list, metals_list, allpolygons, max_cellsize, refined_cellsize, margin, unit, z_mesh_function=util_meshlines.create_z_mesh, xy_mesh_function=util_meshlines.create_standard_xy_mesh, air_around=0):
+            elif isinstance(field_dump, frequency_dump):
+                Dump = CSX.AddDump(field_dump.name, 
+                                     file_type=field_dump.file_type, 
+                                     dump_type=field_dump.dump_type, 
+                                     frequency=field_dump.frequency, 
+                                     sub_sampling=field_dump.subsampling)
+
+            # add dump box
+            xmin, xmax, ymin, ymax  = allpolygons.get_layer_bounding_box(field_dump.source_layernum)
+            zmin = metals_list.getbylayername(field_dump.from_layername).zmin + field_dump.offset_bottom
+            zmax = metals_list.getbylayername(field_dump.to_layername).zmax + field_dump.offset_top
+            Dump.AddBox([xmin,ymin,zmin], [xmax,ymax,zmax])
+    
+
+
+
+def setupSimulation (excite_portnumbers,simulation_ports, FDTD, materials_list, dielectrics_list, metals_list, allpolygons, max_cellsize, refined_cellsize, margin, unit, z_mesh_function=util_meshlines.create_z_mesh, xy_mesh_function=util_meshlines.create_standard_xy_mesh, air_around=0, field_dumps=None):
 # Define function for model creation because we need to create and run separate CSX
 # for each excitation. For S11,S21 we only need to excite port 1, but for S22,S12
 # we need to excite port 2. This requires separate CSX with different port settings.
@@ -336,6 +483,9 @@ def setupSimulation (excite_portnumbers,simulation_ports, FDTD, materials_list, 
 
     # add mesh
     mesh = addMesh_to_CSX (CSX, allpolygons, dielectrics_list, metals_list, refined_cellsize, max_cellsize, margin, air_around, unit, z_mesh_function, xy_mesh_function )
+
+    if field_dumps is not None:
+        addFielddumps_to_CSX (FDTD, CSX, field_dumps, allpolygons, metals_list)
 
     # display mesh information (line count and smallest mesh cells)
     meshinfo = util_meshlines.get_mesh_information(mesh)
