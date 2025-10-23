@@ -454,7 +454,7 @@ def addFielddumps_to_CSX (FDTD, CSX, all_field_dumps, allpolygons, metals_list):
 
 
 
-def setupSimulation (excite_portnumbers,simulation_ports, FDTD, materials_list, dielectrics_list, metals_list, allpolygons, max_cellsize, refined_cellsize, margin, unit, z_mesh_function=util_meshlines.create_z_mesh, xy_mesh_function=util_meshlines.create_standard_xy_mesh, air_around=0, field_dumps=None):
+def setupSimulation (excite_portnumbers,simulation_ports, FDTD, materials_list, dielectrics_list, metals_list, allpolygons, max_cellsize, refined_cellsize, margin, unit, z_mesh_function=util_meshlines.create_z_mesh, xy_mesh_function=util_meshlines.create_standard_xy_mesh, air_around=0, field_dumps=False):
 # Define function for model creation because we need to create and run separate CSX
 # for each excitation. For S11,S21 we only need to excite port 1, but for S22,S12
 # we need to excite port 2. This requires separate CSX with different port settings.
@@ -484,7 +484,7 @@ def setupSimulation (excite_portnumbers,simulation_ports, FDTD, materials_list, 
     # add mesh
     mesh = addMesh_to_CSX (CSX, allpolygons, dielectrics_list, metals_list, refined_cellsize, max_cellsize, margin, air_around, unit, z_mesh_function, xy_mesh_function )
 
-    if field_dumps is not None:
+    if field_dumps != False:
         addFielddumps_to_CSX (FDTD, CSX, field_dumps, allpolygons, metals_list)
 
     # display mesh information (line count and smallest mesh cells)
