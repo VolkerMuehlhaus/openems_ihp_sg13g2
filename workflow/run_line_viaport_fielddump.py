@@ -29,6 +29,7 @@ import matplotlib.pyplot as plt
 # postprocess existing data without re-running simulation?
 preview_only = False
 postprocess_only = False
+field_dumps = True    # Set it to False if you do not want to simulate dumps
 
 # ===================== input files and path settings =======================
 
@@ -87,9 +88,10 @@ simulation_ports.add_port(simulation_setup.simulation_port(portnumber=2, voltage
 # supported dump_type = 'E','H','J','rotH'
 # supported file_type = 'vtk', 'hdf5'
 # z-position is zmax of from_layername, zmin of to_layername
-field_dumps = simulation_setup.all_field_dumps()
-field_dumps.add_frequency_dump(name='Jf', file_type='vtk', dump_type='J', frequency=30e9, source_layernum=301, from_layername='TopMetal2', to_layername='TopMetal2', offset_top=0, offset_bottom=0)
-field_dumps.add_time_dump(name='Et', file_type='vtk', dump_type='E', source_layernum=302, from_layername='Metal1', to_layername='TopMetal2', offset_top=10, offset_bottom=0)
+if field_dumps == True:
+    field_dumps = simulation_setup.all_field_dumps()
+    field_dumps.add_frequency_dump(name='Jf', file_type='vtk', dump_type='J', frequency=30e9, source_layernum=301, from_layername='TopMetal2', to_layername='TopMetal2', offset_top=0, offset_bottom=0)
+    field_dumps.add_time_dump(name='Et', file_type='vtk', dump_type='E', source_layernum=302, from_layername='Metal1', to_layername='TopMetal2', offset_top=10, offset_bottom=0)
 
 
 # ======================== simulation ================================
