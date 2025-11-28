@@ -19,15 +19,15 @@
 
 import os
 
-import util_stackup_reader as stackup_reader
-import util_gds_reader as gds_reader
-import util_utilities as utilities
-import util_meshlines
+from . import util_utilities as utilities
+from . import util_meshlines
 
 from CSXCAD import ContinuousStructure
 from CSXCAD import AppCSXCAD_BIN
 from openEMS import openEMS
 from openEMS.physical_constants import *
+
+import numpy as np
 
 
 class simulation_port:
@@ -94,7 +94,20 @@ class all_simulation_ports:
       self.portlayers = newportlayers        
           
 
+  def all_active_excitations (self):
+    """Get all active port excitations, i.e. ports with voltage other than zero
+    Returns:
+        list of simulation_port: active port instances
+    """
 
+    numbers = []
+    for port in self.ports:
+        if abs(port.voltage) > 1E-6:
+            # skip zero voltage ports for excitation
+            # append as list, we need that for create_palace() function
+            numbers.append([port.portnumber])
+    return numbers
+  
        
   '''
     openEMS dump types:
@@ -452,12 +465,71 @@ def addFielddumps_to_CSX (FDTD, CSX, all_field_dumps, allpolygons, metals_list):
             Dump.AddBox([xmin,ymin,zmin], [xmax,ymax,zmax])
     
 
+def setupSimulation (excite_portnumbers=None,
+                     simulation_ports=None, 
+                     FDTD=None, 
+                     materials_list=None, 
+                     dielectrics_list=None, 
+                     metals_list=None, 
+                     allpolygons=None, 
+                     max_cellsize=None, 
+                     refined_cellsize=None, 
+                     margin=None, 
+                     unit=None, 
+                     z_mesh_function=util_meshlines.create_z_mesh, 
+                     xy_mesh_function=util_meshlines.create_standard_xy_mesh, 
+                     air_around=0, 
+                     field_dumps=False,
+                     settings=None):
+
+    # This is the unction for model creation because we need to create and run separate CSX
+    # for each excitation. For S11,S21 we only need to excite port 1, but for S22,S12
+    # we need to excite port 2. This requires separate CSX with different port settings.
+
+    # This function can be called in two ways: 
+    # 1) by all those positional parameters or 
+    # 2) by passing just FDTD and settings dictionary, where everything is inside the settings dict
+
+    if dielectrics_list is None:
+        if settings is not None:
+            print('Getting simulation settings from "settings" dictionary')
+            # This is option 2, everything is inside the settings dict and we need to get it from there
+            excite_portnumbers = settings['excite_portnumbers']
+            simulation_ports   = settings['simulation_ports']
+            materials_list     = settings['materials_list']
+            dielectrics_list   = settings['dielectrics_list']
+            metals_list        = settings['metals_list']
+            allpolygons        = settings['allpolygons']
+            refined_cellsize   = settings['refined_cellsize']
+            margin             = settings['margin']
+            unit               = settings['unit']
+            z_mesh_function    = settings.get('z_mesh_function',util_meshlines.create_z_mesh) 
+            xy_mesh_function   = settings.get('xy_mesh_function', util_meshlines.create_xy_mesh_from_polygons)
+            air_around         = settings.get('air_around', 0)
+            field_dumps        = settings.get('field_dumps', False)
+
+            # calculate maximum cellsize from wavelength in dielectric
+            fstop = settings.get('fstop',None)
+            unit  = settings.get('unit',None)
+            cpw   = settings.get('cells_per_wavelength',None)
+            if (fstop is not None) and (unit is not None) and (cpw is not None):
+                wavelength_air = 3e8/fstop / unit
+                max_cellsize = (wavelength_air)/(np.sqrt(materials_list.eps_max)*cpw) 
+            else:
+                max_cellsize       = settings.get('max_cellsize',None)
+                if max_cellsize is None:
+                    print('If fstop, units and cells_per_wavelength are not included in settings, you must specify max_cellsize value')
+                    exit(1)                    
+
+        else:
+            print('If positional parameters are not defined in setupSimulation, you must provide valid "settings" dictionary instead')                
+            exit(1)
+
+        if FDTD is None:
+            print('FDTD must be passed to setupSimulation as named parameter, i.e. "FDTD=FDTD" in parameters')                
+            exit(1)
 
 
-def setupSimulation (excite_portnumbers,simulation_ports, FDTD, materials_list, dielectrics_list, metals_list, allpolygons, max_cellsize, refined_cellsize, margin, unit, z_mesh_function=util_meshlines.create_z_mesh, xy_mesh_function=util_meshlines.create_standard_xy_mesh, air_around=0, field_dumps=False):
-# Define function for model creation because we need to create and run separate CSX
-# for each excitation. For S11,S21 we only need to excite port 1, but for S22,S12
-# we need to excite port 2. This requires separate CSX with different port settings.
 
     CSX = ContinuousStructure()
     FDTD.SetCSX(CSX)
@@ -494,8 +566,40 @@ def setupSimulation (excite_portnumbers,simulation_ports, FDTD, materials_list, 
     return FDTD
 
 
-def runSimulation (excite_portnumbers, FDTD, sim_path, model_basename, preview_only, postprocess_only, force_simulation=False):
- 
+def runSimulation (excite_portnumbers=None, 
+                   FDTD=None, 
+                   sim_path=None, 
+                   model_basename=None, 
+                   preview_only=None, 
+                   postprocess_only=None, 
+                   force_simulation=False,
+                   settings=None):
+    
+    # This function runs the actual simulation in openEMS
+
+    # This function can be called in two ways: 
+    # 1) by all those positional parameters or 
+    # 2) by passing just FDTD and settings dictionary, where everything is inside the settings dict
+
+    if excite_portnumbers is None:
+        if settings is not None:
+            print('Getting simulation settings from "settings" dictionary')
+            # This is option 2, everything is inside the settings dict and we need to get it from there
+            excite_portnumbers = settings['excite_portnumbers']
+            sim_path           = settings['sim_path']
+            model_basename     = settings['model_basename']
+            preview_only       = settings.get('preview_only',False)
+            postprocess_only   = settings.get('postprocess_only','')
+            force_simulation   = settings.get('force_simulation', False)
+        else:
+            print('If positional parameters are not defined in setupSimulation, you must provide valid "settings" dictionary instead')                
+            exit(1)
+
+        if FDTD is None:
+            print('FDTD must be passed to setupSimulation as named parameter, i.e. "FDTD=FDTD" in parameters')                
+            exit(1)
+
+
     excitation_path = utilities.get_excitation_path (sim_path, excite_portnumbers)
     
     if not postprocess_only:
@@ -544,11 +648,92 @@ def runSimulation (excite_portnumbers, FDTD, sim_path, model_basename, preview_o
             print('Data for this model already exists, skipping simulation!')
             print('To force re-simulation, add parameter "force_simulation=True" to the runSimulation() call.')
 
+    return excitation_path 
 
-    return excitation_path
+
+def runOpenEMS (excite_ports, settings):
+    # This is the all-in-one simulation function that creates openEMS model and runs all ports, on eafter another
+
+    # get settings from simulation model
+    preview_only = settings.get('preview_only', False)
+    postprocess_only = settings.get('postprocess_only', False)
 
 
-######### end of function createSimulation ()  ##########
+    if not postprocess_only:
+        unit    = settings.get('unit', 1e-6) # unit defaults to micron
+        margin  = settings['margin']   # oversize of dielectric layers relative to drawing
+
+        fstart  = settings['fstart']
+        fstop   = settings['fstop']
+        numfreq = settings.get('numfreq', 401)
+
+        
+        energy_limit = settings['energy_limit']
+        refined_cellsize = settings['refined_cellsize']
+        cells_per_wavelength = settings['cells_per_wavelength']
+        Boundaries = settings['Boundaries']
+
+        simulation_ports = settings['simulation_ports'] 
+        materials_list = settings['materials_list']
+        dielectrics_list = settings['dielectrics_list'] 
+        metals_list = settings['metals_list'] 
+        allpolygons = settings['allpolygons'] 
+
+        sim_path = settings['sim_path'] 
+        model_basename = settings['model_basename'] 
+
+        # calculate wavelength and max_cellsize in project units
+        wavelength_air = 3e8/fstop / unit
+        max_cellsize = (wavelength_air)/(np.sqrt(materials_list.eps_max)*cells_per_wavelength) 
+
+        # define excitation and stop criteria and boundaries
+        FDTD = openEMS(EndCriteria=np.exp(energy_limit/10 * np.log(10)))
+        FDTD.SetGaussExcite( (fstart+fstop)/2, (fstop-fstart)/2 )
+        FDTD.SetBoundaryCond( Boundaries )
+
+        for port in simulation_ports.ports:
+            setupSimulation   ([port.portnumber], 
+                                simulation_ports, 
+                                FDTD, 
+                                materials_list, 
+                                dielectrics_list, 
+                                metals_list, 
+                                allpolygons, 
+                                max_cellsize, 
+                                refined_cellsize, 
+                                margin, 
+                                unit, 
+                                xy_mesh_function=util_meshlines.create_xy_mesh_from_polygons)
+            
+            runSimulation  ([port.portnumber], 
+                                FDTD, 
+                                sim_path, 
+                                model_basename, 
+                                preview_only, 
+                                False)        
+    
+
+        # Initialize an empty matrix for S-parameters
+        num_ports = simulation_ports.portcount
+        s_params = np.empty((num_ports, num_ports, numfreq), dtype=object)
+
+        # Define frequency resolution. Due to FFT from Empire time domain results, 
+        # this is postprocessing and we can change it again at any time.
+        f = np.linspace(fstart, fstop, numfreq)
+
+        # Populate the S-parameter matrix with simulation results
+        for i in range(1, num_ports + 1):
+            for j in range(1, num_ports + 1):
+                s_params[i-1, j-1] = utilities.calculate_Sij(i, j, f, sim_path, simulation_ports)
+
+        # Write to Touchstone *.snp file
+        snp_name = os.path.join(sim_path, model_basename + '.s' + str(num_ports) + 'p')
+        utilities.write_snp(s_params, f, snp_name)
+
+        print('Created S-parameter output file at ', snp_name)
+
+
+
 
 # Utility functions for hash file.
 # By creating and storing a hash of CSX file to the result folder when simulation is finished,
