@@ -21,7 +21,6 @@
 import gdspy
 import numpy as np
 import os
-import util_stackup_reader as stackup_reader
 
 
 # check that we have gdspy version 1.6.x or later
@@ -483,16 +482,5 @@ def read_gds(filename, layerlist, purposelist, metals_list, preprocess=False, me
  
 
 
-# =======================================================================================
-# Test code when running as standalone script
-# =======================================================================================
 
-if __name__ == "__main__":
-
-  filename = "L_2n0_simplified.gds"
-  allpolygons = read_gds(filename,[134, 133, 126, 8],[0], None)  # read layers 134,133,126, 8 with purpose 0
-  for poly in allpolygons.polygons:
-    print(poly)
-
-  print("Bounding box: " + str(allpolygons.xmin) + " " + str(allpolygons.xmax) + " " + str(allpolygons.ymin) + " " + str(allpolygons.ymax))
   

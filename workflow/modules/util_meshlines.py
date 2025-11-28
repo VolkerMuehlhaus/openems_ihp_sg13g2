@@ -19,8 +19,7 @@
 # create mesh lines for metals and dielectrics
 
 import math
-from util_stackup_reader import *
-from util_gds_reader import *
+import numpy as np
 
 def create_z_mesh(mesh, dielectrics_list, metals_list, target_cellsize, max_cellsize, antenna_margin, exclude_list):
 
