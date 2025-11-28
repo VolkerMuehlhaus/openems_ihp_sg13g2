@@ -1,4 +1,4 @@
-# Utilities for gds2palace 
+# gds2openEMS - create and run openEMS models from GDSII layout files
 ########################################################################
 #
 # Copyright 2025 Volker Muehlhaus and IHP PDK Authors
