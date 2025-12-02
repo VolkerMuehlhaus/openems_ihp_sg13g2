@@ -259,7 +259,7 @@ def merge_via_array (polygons, maxspacing):
 
 # ----------- read GDSII file, return openEMS polygon list object -----------
 
-def read_gds(filename, layerlist, purposelist, metals_list, preprocess=False, merge_polygon_size=0, mirror=False, offset_x=0, offset_y=0, gds_boundary_layers=[], layernumber_offset=0):
+def read_gds(filename, layerlist, purposelist, metals_list, preprocess=False, merge_polygon_size=0, mirror=False, offset_x=0, offset_y=0, gds_boundary_layers=[], layernumber_offset=0, cellname=""):
 
   """
   Read GDSII file and return polygon list object
@@ -334,8 +334,10 @@ def read_gds(filename, layerlist, purposelist, metals_list, preprocess=False, me
 
     # evaluate only first top level cell
     toplevel_cell_list = input_library.top_level()
-    cell = toplevel_cell_list[0]
 
+    # try to get cell named cellname, otherwise top level cell
+    cell = input_library.cells.get(cellname, toplevel_cell_list[0])
+    
     all_polygons = all_polygons_list()
 
     # flatten hierarchy below this cell

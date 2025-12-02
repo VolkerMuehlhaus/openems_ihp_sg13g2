@@ -1,4 +1,4 @@
-# gds2openEMS - create and run openEMS models from GDSII layout files
+# Utilities for gds2openEMS
 ########################################################################
 #
 # Copyright 2025 Volker Muehlhaus and IHP PDK Authors
@@ -23,5 +23,5 @@ from . import util_utilities as utilities
 from . import util_simulation_setup as simulation_setup
 from . import util_meshlines as util_meshlines
 
-__version__ = "0.2.0"   # version of gds2openEMS
+__version__ = "0.1.1"   # version of gds2openEMS
 
