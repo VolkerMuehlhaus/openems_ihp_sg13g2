@@ -19,16 +19,15 @@
 
 import os
 
-import util_stackup_reader as stackup_reader
-import util_gds_reader as gds_reader
-import util_utilities as utilities
-import util_meshlines
+from . import util_utilities as utilities
+from . import util_meshlines
 
-from pylab import *
 from CSXCAD import ContinuousStructure
 from CSXCAD import AppCSXCAD_BIN
 from openEMS import openEMS
 from openEMS.physical_constants import *
+
+import numpy as np
 
 
 class simulation_port:
@@ -86,6 +85,152 @@ class all_simulation_ports:
   
   def get_port_by_number (self, portnum):
       return self.ports[portnum-1] 
+  
+  def apply_layernumber_offset (self, offset):
+      newportlayers = []    
+      for port in self.ports:
+          port.source_layernum = port.source_layernum + offset
+          newportlayers.append(port.source_layernum)
+      self.portlayers = newportlayers        
+          
+
+  def all_active_excitations (self):
+    """Get all active port excitations, i.e. ports with voltage other than zero
+    Returns:
+        list of simulation_port: active port instances
+    """
+
+    numbers = []
+    for port in self.ports:
+        if abs(port.voltage) > 1E-6:
+            # skip zero voltage ports for excitation
+            # append as list, we need that for create_palace() function
+            numbers.append([port.portnumber])
+    return numbers
+  
+       
+  '''
+    openEMS dump types:
+
+    * 0  : for E-field time-domain dump (default)
+    * 1  : for H-field time-domain dump
+    * 2  : for electric current time-domain dump
+    * 3  : for total current density (rot(H)) time-domain dump
+
+    * 10 : for E-field frequency-domain dump
+    * 11 : for H-field frequency-domain dump
+    * 12 : for electric current frequency-domain dump
+    * 13 : for total current density (rot(H)) frequency-domain dump
+
+    * 20 : local SAR frequency-domain dump
+    * 21 :  1g averaging SAR frequency-domain dump
+    * 22 : 10g averaging SAR frequency-domain dump
+
+    * 29 : raw data needed for SAR calculations (electric field FD, cell volume, conductivity and density)
+
+    openEMS dump modes:
+
+    * 0 : no-interpolation
+    * 1 : node-interpolation (default, see warning below)
+    * 2 : cell-interpolation (see warning below)
+
+    openEMS file types:
+
+    * 0 : vtk-file  (default)
+    * 1 : hdf5-file (easier to read by python, using h5py)
+'''
+
+
+
+class dump():
+  def __init__ (self, name, file_type, dump_type, source_layernum, from_layername, to_layername, offset_top, offset_bottom, sub_sampling):
+      self.name = name
+
+      # allow string names for filetype also
+      if file_type == 'vtk': 
+          file_type=0
+      elif file_type == 'hdf5': 
+          file_type=1
+
+      if file_type not in [0,1]:
+        print('Invalid dump filetype specified for ', name)
+        exit(1)
+
+      self.file_type = file_type
+      self.source_layernum = source_layernum
+      self.from_layername=from_layername
+      self.to_layername=to_layername
+      self.offset_top = offset_top
+      self.offset_bottom = offset_bottom
+      self.subsampling = sub_sampling
+
+
+class time_dump(dump):
+  def __init__ (self, name, file_type, dump_type, source_layernum, from_layername, to_layername, offset_top, offset_bottom, sub_sampling):
+      super().__init__(name, file_type, dump_type, source_layernum, from_layername, to_layername, offset_top, offset_bottom, sub_sampling)
+
+      # allow string names for dumptype also
+      if dump_type == 'E' or dump_type == 'Et': 
+          dump_type=0
+      elif dump_type == 'H' or dump_type == 'Ht': 
+          dump_type=1
+      elif dump_type == 'J' or dump_type == 'Jt': 
+          dump_type=2
+      elif dump_type == 'rotH' or dump_type == 'rotHt': 
+          dump_type=3
+
+      self.dump_type = dump_type
+
+      if dump_type not in [0,1,2,3]:
+        print('Invalid dumptype specified for time domain dump ', name)
+        exit(1)
+
+
+class frequency_dump(dump):
+  def __init__ (self, name, frequency, file_type, dump_type, source_layernum, from_layername='', to_layername='', offset_top=0, offset_bottom=0, sub_sampling=[1,1,1]):
+      super().__init__(name, file_type, dump_type, source_layernum, from_layername, to_layername, offset_top, offset_bottom, sub_sampling)
+      self.frequency = frequency
+
+      # allow string names for dumptype also
+      if dump_type == 'E' or dump_type == 'Ef': 
+          dump_type=10
+      elif dump_type == 'H' or dump_type == 'Hf': 
+          dump_type=11
+      elif dump_type == 'J' or dump_type == 'Jf': 
+          dump_type=12
+      elif dump_type == 'rotH' or dump_type == 'rotHf': 
+          dump_type=13
+
+      self.dump_type = dump_type
+
+      if dump_type not in [10,11,12,13]:
+        print('Invalid dumptype specified for frequency domain dump ', name)
+        exit(1)
+
+
+
+
+class all_field_dumps():
+  def __init__ (self):
+      self.field_dumps = []
+      self.dumplayers  = []
+      self.count = 0
+
+  def add_dump (self, dump):
+      self.field_dumps.append(dump)
+      self.count = len(self.field_dumps)
+      self.dumplayers.append(dump.source_layernum)
+
+  def add_frequency_dump (self, name, frequency, file_type, dump_type, source_layernum, from_layername='', to_layername='', offset_top=0, offset_bottom=0, sub_sampling=[1,1,1]):
+      self.field_dumps.append(frequency_dump(name=name, frequency=frequency, file_type=file_type, dump_type=dump_type, source_layernum=source_layernum, from_layername=from_layername, to_layername=to_layername, offset_top=offset_top, offset_bottom=offset_bottom, sub_sampling=sub_sampling))
+      self.count = len(self.field_dumps)      
+      self.dumplayers.append(source_layernum)
+
+  def add_time_dump (self, name, file_type, dump_type, source_layernum, from_layername='', to_layername='', offset_top=0, offset_bottom=0, sub_sampling=[1,1,1]):
+      self.field_dumps.append(time_dump(name=name, file_type=file_type, dump_type=dump_type, source_layernum=source_layernum, from_layername=from_layername, to_layername=to_layername, offset_top=offset_top, offset_bottom=offset_bottom, sub_sampling=sub_sampling))
+      self.count = len(self.field_dumps)      
+      self.dumplayers.append(source_layernum)
+
 
 
 def addGeometry_to_CSX (CSX, excite_portnumbers,simulation_ports,FDTD, materials_list, dielectrics_list, metals_list, allpolygons):
@@ -104,23 +249,57 @@ def addGeometry_to_CSX (CSX, excite_portnumbers,simulation_ports,FDTD, materials
         if all_assigned != None:
             for metal in all_assigned:
                 materialname = metal.material
-                # check for openEMS CSX material object that belongs to this material name
-                if materialname in CSX_materials_list.keys():
-                    # already in list, was used before
-                    CSX_material = CSX_materials_list[materialname]
-                else:
-                    # create CSX material, was not used before
-                    material = materials_list.get_by_name(materialname)
-                    CSX_material = CSX.AddMaterial(material.name, kappa=material.sigma, epsilon=material.eps)
-                    CSX_materials_list.update({material.name: CSX_material})
-                    # set color for IHP layers, if available, so that we see that color in AppCSXCAD 3D view
-                    if material.color != "":
-                        CSX_material.SetColor('#' + material.color, 255)  # transparency value 255 = solid
+                
+                # check for stackup defintions that are not compatible with this workflow
+                if not metal.is_sheet:
+                    # check for openEMS CSX material object that belongs to this material name
+                    if materialname in CSX_materials_list.keys():
+                        # already in list, was used before
+                        CSX_material = CSX_materials_list[materialname]
+                    else:
+                        # create CSX material, was not used before
+                        material = materials_list.get_by_name(materialname)
+                        CSX_material = CSX.AddMaterial(material.name, kappa=material.sigma, epsilon=material.eps)
+                        CSX_materials_list.update({material.name: CSX_material})
+                        # set color for IHP layers, if available, so that we see that color in AppCSXCAD 3D view
+                        if material.color != "":
+                            CSX_material.SetColor('#' + material.color, 255)  # transparency value 255 = solid
 
-                # add Polygon to CSX 
-                # remember value for MA meshing algorithm, which works on CSX polygons rather than our GDS polygons
-                p = CSX_material.AddLinPoly(priority=200, points=poly.pts, norm_dir ='z', elevation=metal.zmin, length=metal.thickness)
-                poly.CSXpoly = p
+                    # add Polygon to CSX 
+                    # remember value for MA meshing algorithm, which works on CSX polygons rather than our GDS polygons
+                    p = CSX_material.AddLinPoly(priority=200, points=poly.pts, norm_dir ='z', elevation=metal.zmin, length=metal.thickness)
+                    poly.CSXpoly = p
+
+                else:
+                    print('Sheet material assigned to layer', metal.name)
+                    # create a unique material defintion for this layer
+
+                    # get thickness of layer definition
+                    thickness = metal.zmax - metal.zmin # should always be zero for sheet
+
+                    # get material type
+                    material = materials_list.get_by_name(materialname)
+
+                    if material.type == 'RESISTOR' and material.Rs>0 :
+                        # define conducting sheet with sigma calculated from material Rs value and thickness from layer 
+                        if thickness==0:
+                            # thickness not specified in stackup
+                            thickness=1e-6 # assume 1 micron for loss calculation, we then calculate Sigma to obtain desired Rs
+                        sigma = 1/(thickness*material.Rs)  
+                        CSX_material = CSX.AddConductingSheet(metal.name + '_' + material.name, conductivity=sigma, thickness=thickness)
+                        CSX_materials_list.update({material.name: CSX_material})
+                    else:
+                        print('WARNING: Invalid material assigned to layer ', metal.name)
+                        print(str(material))    
+                        print('=====> MATERIAL IS REPLACED BY PEC (PERFECT CONDUCTOR) <=====')
+                        CSX_material = CSX.AddMaterial('PEC_' + material.name)
+                        CSX_materials_list.update({material.name: CSX_material})
+
+                    # add Polygon to CSX but no thickness
+                    # remember value for MA meshing algorithm, which works on CSX polygons rather than our GDS polygons
+                    p = CSX_material.AddLinPoly(priority=200, points=poly.pts, norm_dir ='z', elevation=metal.zmin, length=0)
+                    poly.CSXpoly = p
+
                 
     return CSX, CSX_materials_list                    
 
@@ -130,29 +309,33 @@ def addDielectrics_to_CSX (CSX, CSX_materials_list,  materials_list, dielectrics
 
     for dielectric in dielectrics_list.dielectrics:
         # get CSX material object for this dielectric layers material name
-        materialname = dielectric.material
-        material = materials_list.get_by_name(materialname)
+        materialname = dielectric.name
+        material = materials_list.get_by_name(dielectric.material)
+        if material is None:
+            print('ERROR: Material ', materialname, 'for dielectric layer ', dielectric.name, ' is not defined in stackup file. ')
+            exit(1)
         
         if materialname in CSX_materials_list.keys():
-            # already defined in CSX materials, was used before
-            CSX_material = CSX_materials_list[materialname]
-        else:
-            # create CSX material, was not used before
-            CSX_material = CSX.AddMaterial(material.name, kappa=material.sigma, epsilon=material.eps)
-            CSX_materials_list.update({material.name: CSX_material})
-            # set color for IHP layers, if available
-            if material.color != "":
-                CSX_material.SetColor('#' + material.color, 20)  # transparency value 20, very transparent
+            # create new material per layer, so that we can enable/disable them in appCSXCAD when used more than once
+            materialname = materialname + '_1'
+            
+        # create CSX material
+        CSX_material = CSX.AddMaterial(materialname, kappa=material.sigma, epsilon=material.eps)
+        CSX_materials_list.update({materialname: CSX_material})
+        # set color for IHP layers, if available
+        if material.color != "":
+            CSX_material.SetColor('#' + material.color, 20)  # transparency value 20, very transparent
 
         # now that we have a CSX material, add the dielectric body (substrate, oxide etc)
-            CSX_material.AddBox(priority=10, start=[allpolygons.xmin - margin, allpolygons.ymin - margin, dielectric.zmin], stop=[allpolygons.xmax + margin, allpolygons.ymax + margin, dielectric.zmax])
+            bbox_xmin, bbox_xmax, bbox_ymin, bbox_ymax = allpolygons.bounding_box.get_layer_bounding_box(dielectric.gdsboundary)
+            CSX_material.AddBox(priority=10, start=[bbox_xmin - margin, bbox_ymin - margin, dielectric.zmin], stop=[bbox_xmax + margin, bbox_ymax + margin, dielectric.zmax])
 
     # Optional: add a layer of PEC with zero thickness below stackup
     # This is useful if we have air layer around for absorbing boundaries (antenna simulation)
     if addPEC:
         PEC = CSX.AddMetal( 'PEC_bottom' )
-        PEC.SetColor('#ffffff', 50) 
-        PEC.AddBox(priority=255, start=[allpolygons.xmin - margin, allpolygons.ymin - margin, 0], stop=[allpolygons.xmax + margin, allpolygons.ymax + margin, 0])
+        PEC.SetColor("#ffffff", 50) 
+        PEC.AddBox(priority=255, start=[bbox_xmin - margin, bbox_ymin - margin, 0], stop=[bbox_xmax + margin, bbox_ymax + margin, 0])
 
     return CSX, CSX_materials_list  
 
@@ -170,80 +353,78 @@ def addPorts_to_CSX (CSX, excite_portnumbers,simulation_ports,FDTD, materials_li
         metal = metals_list.getbylayernumber (poly.layernum)
         if metal == None: # this layer does not exist in XML stackup
             # found a layer that is not defined in stackup from XML, check if used for ports
-            if poly.layernum in simulation_ports.portlayers:
+
+            # find port definition for this GDSII source layer number
+            port = simulation_ports.get_port_by_layernumber(poly.layernum)
+            if port is not None:
                 # mark polygon for special handling in meshing
                 poly.is_port = True 
 
-                # find port definition for this GDSII source layer number
-                port = simulation_ports.get_port_by_layernumber(poly.layernum)
-                if port != None:
-                    portnum = port.portnumber
-                    port_direction = port.direction
-                    port_Z0 = port.port_Z0
-                    if portnum in excite_portnumbers: # list of excited ports, this can be more than one port number for GSG with composite ports
-                        voltage = port.voltage        # only apply source voltage to ports that are excited in this simulation run
+                portnum = port.portnumber
+                port_direction = port.direction
+                port_Z0 = port.port_Z0
+                if portnum in excite_portnumbers: # list of excited ports, this can be more than one port number for GSG with composite ports
+                    voltage = port.voltage        # only apply source voltage to ports that are excited in this simulation run
+                else:
+                    voltage = 0                   # passive port in this simulation run
+                if port.reversed_direction:       # port direction changes polarity
+                    xmin = poly.xmax
+                    xmax = poly.xmin
+                    ymin = poly.ymax
+                    ymax = poly.ymin
+                else:        
+                    xmin = poly.xmin
+                    xmax = poly.xmax
+                    ymin = poly.ymin
+                    ymax = poly.ymax
+                
+                # port z coordinates are different between in-plane ports and via ports
+                if port.target_layername != None:
+                    # in-plane port   
+                    port_metal = metals_list.getbylayername(port.target_layername)
+                    zmin = port_metal.zmin
+                    zmax = port_metal.zmax
+                else:
+                    # via port 
+                    if port.from_layername == 'GND': # special case bottom of simulation box
+                        zmin_from = 0
+                        zmax_from = 0
                     else:
-                        voltage = 0                   # passive port in this simulation run
-                    if port.reversed_direction:       # port direction changes polarity
-                        xmin = poly.xmax
-                        xmax = poly.xmin
-                        ymin = poly.ymax
-                        ymax = poly.ymin
-                    else:        
-                        xmin = poly.xmin
-                        xmax = poly.xmax
-                        ymin = poly.ymin
-                        ymax = poly.ymax
-                    
-                    # port z coordinates are different between in-plane ports and via ports
-                    if port.target_layername != None:
-                        # in-plane port   
-                        port_metal = metals_list.getbylayername(port.target_layername)
-                        zmin = port_metal.zmin
-                        zmax = port_metal.zmax
-                    else:
-                       # via port 
-                       if port.from_layername == 'GND': # special case bottom of simulation box
-                         zmin_from = 0
-                         zmax_from = 0
-                       else:
-                         from_metal = metals_list.getbylayername(port.from_layername)
-                         if from_metal==None:
+                        from_metal = metals_list.getbylayername(port.from_layername)
+                        if from_metal==None:
                             print('[ERROR] Invalid layer ' , port.from_layername, ' in port definition, not found in XML stackup file!')
                             sys.exit(1)                             
-                         zmin_from  = from_metal.zmin
-                         zmax_from  = from_metal.zmax
-                       
-                       if port.to_layername == 'GND': # special case bottom of simulation box
-                         zmin_to = 0
-                         zmax_to = 0
-                       else:
-                         to_metal   = metals_list.getbylayername(port.to_layername)
-                         if to_metal==None:
+                        zmin_from  = from_metal.zmin
+                        zmax_from  = from_metal.zmax
+                    
+                    if port.to_layername == 'GND': # special case bottom of simulation box
+                        zmin_to = 0
+                        zmax_to = 0
+                    else:
+                        to_metal   = metals_list.getbylayername(port.to_layername)
+                        if to_metal==None:
                             print('[ERROR] Invalid layer ' , port.to_layername, ' in port definition, not found in XML stackup file!')
                             sys.exit(1)                             
-                         zmin_to    = to_metal.zmin
-                         zmax_to    = to_metal.zmax
-                       
-                       # if necessary, swap from and to position
-                       if zmin_from < zmin_to:
-                           # from layer is lower layer
-                           zmin = zmax_from
-                           zmax = zmin_to
-                       else:    
-                           # to layer is lower layer
-                           zmin = zmax_to
-                           zmax = zmin_from
+                        zmin_to    = to_metal.zmin
+                        zmax_to    = to_metal.zmax
+                    
+                    # if necessary, swap from and to position
+                    if zmin_from < zmin_to:
+                        # from layer is lower layer
+                        zmin = zmax_from
+                        zmax = zmin_to
+                    else:    
+                        # to layer is lower layer
+                        zmin = zmax_to
+                        zmax = zmin_from
 
-                    CSX_port = FDTD.AddLumpedPort(portnum, port_Z0, [xmin, ymin, zmin], [xmax, ymax, zmax], port_direction, voltage, priority=150)
-                    # store CSX_port in the port object, for evaluation later
-                    port.set_CSXport(CSX_port)
+                CSX_port = FDTD.AddLumpedPort(portnum, port_Z0, [xmin, ymin, zmin], [xmax, ymax, zmax], port_direction, voltage, priority=150)
+                # store CSX_port in the port object, for evaluation later
+                port.set_CSXport(CSX_port)
                     
 
 
     return CSX
-
-
 
 
 
@@ -260,18 +441,102 @@ def addMesh_to_CSX (CSX, allpolygons, dielectrics_list, metals_list, refined_cel
     return mesh
 
 
+def addFielddumps_to_CSX (FDTD, CSX, all_field_dumps, allpolygons, metals_list):
+# Add field dumps for time and frequency domain and nf2ff, if any
+    if all_field_dumps.count > 0:
+        for field_dump in all_field_dumps.field_dumps:
+            if isinstance(field_dump, time_dump):
+                Dump = CSX.AddDump(field_dump.name, 
+                                     file_type=field_dump.file_type, 
+                                     dump_type=field_dump.dump_type, 
+                                     sub_sampling=field_dump.subsampling)
 
-def setupSimulation (excite_portnumbers,simulation_ports, FDTD, materials_list, dielectrics_list, metals_list, allpolygons, max_cellsize, refined_cellsize, margin, unit, z_mesh_function=util_meshlines.create_z_mesh, xy_mesh_function=util_meshlines.create_standard_xy_mesh, air_around=0):
-# Define function for model creation because we need to create and run separate CSX
-# for each excitation. For S11,S21 we only need to excite port 1, but for S22,S12
-# we need to excite port 2. This requires separate CSX with different port settings.
+            elif isinstance(field_dump, frequency_dump):
+                Dump = CSX.AddDump(field_dump.name, 
+                                     file_type=field_dump.file_type, 
+                                     dump_type=field_dump.dump_type, 
+                                     frequency=field_dump.frequency, 
+                                     sub_sampling=field_dump.subsampling)
+
+            # add dump box
+            xmin, xmax, ymin, ymax  = allpolygons.get_layer_bounding_box(field_dump.source_layernum)
+            zmin = metals_list.getbylayername(field_dump.from_layername).zmin + field_dump.offset_bottom
+            zmax = metals_list.getbylayername(field_dump.to_layername).zmax + field_dump.offset_top
+            Dump.AddBox([xmin,ymin,zmin], [xmax,ymax,zmax])
+    
+
+def setupSimulation (excite_portnumbers=None,
+                     simulation_ports=None, 
+                     FDTD=None, 
+                     materials_list=None, 
+                     dielectrics_list=None, 
+                     metals_list=None, 
+                     allpolygons=None, 
+                     max_cellsize=None, 
+                     refined_cellsize=None, 
+                     margin=None, 
+                     unit=None, 
+                     z_mesh_function=util_meshlines.create_z_mesh, 
+                     xy_mesh_function=util_meshlines.create_standard_xy_mesh, 
+                     air_around=0, 
+                     field_dumps=False,
+                     settings=None):
+
+    # This is the unction for model creation because we need to create and run separate CSX
+    # for each excitation. For S11,S21 we only need to excite port 1, but for S22,S12
+    # we need to excite port 2. This requires separate CSX with different port settings.
+
+    # This function can be called in two ways: 
+    # 1) by all those positional parameters or 
+    # 2) by passing just FDTD and settings dictionary, where everything is inside the settings dict
+
+    if dielectrics_list is None:
+        if settings is not None:
+            print('Getting simulation settings from "settings" dictionary')
+            # This is option 2, everything is inside the settings dict and we need to get it from there
+            excite_portnumbers = settings['excite_portnumbers']
+            simulation_ports   = settings['simulation_ports']
+            materials_list     = settings['materials_list']
+            dielectrics_list   = settings['dielectrics_list']
+            metals_list        = settings['metals_list']
+            allpolygons        = settings['allpolygons']
+            refined_cellsize   = settings['refined_cellsize']
+            margin             = settings['margin']
+            unit               = settings['unit']
+            z_mesh_function    = settings.get('z_mesh_function',util_meshlines.create_z_mesh) 
+            xy_mesh_function   = settings.get('xy_mesh_function', util_meshlines.create_xy_mesh_from_polygons)
+            air_around         = settings.get('air_around', 0)
+            field_dumps        = settings.get('field_dumps', False)
+
+            # calculate maximum cellsize from wavelength in dielectric
+            fstop = settings.get('fstop',None)
+            unit  = settings.get('unit',None)
+            cpw   = settings.get('cells_per_wavelength',None)
+            if (fstop is not None) and (unit is not None) and (cpw is not None):
+                wavelength_air = 3e8/fstop / unit
+                max_cellsize = (wavelength_air)/(np.sqrt(materials_list.eps_max)*cpw) 
+            else:
+                max_cellsize       = settings.get('max_cellsize',None)
+                if max_cellsize is None:
+                    print('If fstop, units and cells_per_wavelength are not included in settings, you must specify max_cellsize value')
+                    exit(1)                    
+
+        else:
+            print('If positional parameters are not defined in setupSimulation, you must provide valid "settings" dictionary instead')                
+            exit(1)
+
+        if FDTD is None:
+            print('FDTD must be passed to setupSimulation as named parameter, i.e. "FDTD=FDTD" in parameters')                
+            exit(1)
+
+
 
     CSX = ContinuousStructure()
     FDTD.SetCSX(CSX)
 
     # add geometries and return list of used materials
     CSX, CSX_materials_list = addGeometry_to_CSX (CSX, excite_portnumbers,simulation_ports,FDTD, materials_list, dielectrics_list, metals_list, allpolygons)
-    CSX, CSX_materials_list = addDielectrics_to_CSX (CSX, CSX_materials_list,  materials_list, dielectrics_list, allpolygons, margin, addPEC=(air_around>0))
+    CSX, CSX_materials_list = addDielectrics_to_CSX (CSX, CSX_materials_list,  materials_list, dielectrics_list, allpolygons, margin, addPEC=False)
 
     # add ports
     CSX  = addPorts_to_CSX (CSX, excite_portnumbers,simulation_ports,FDTD, materials_list, dielectrics_list, metals_list, allpolygons)
@@ -291,6 +556,9 @@ def setupSimulation (excite_portnumbers,simulation_ports, FDTD, materials_list, 
     # add mesh
     mesh = addMesh_to_CSX (CSX, allpolygons, dielectrics_list, metals_list, refined_cellsize, max_cellsize, margin, air_around, unit, z_mesh_function, xy_mesh_function )
 
+    if field_dumps != False:
+        addFielddumps_to_CSX (FDTD, CSX, field_dumps, allpolygons, metals_list)
+
     # display mesh information (line count and smallest mesh cells)
     meshinfo = util_meshlines.get_mesh_information(mesh)
     print(meshinfo)
@@ -298,8 +566,40 @@ def setupSimulation (excite_portnumbers,simulation_ports, FDTD, materials_list, 
     return FDTD
 
 
-def runSimulation (excite_portnumbers, FDTD, sim_path, model_basename, preview_only, postprocess_only, force_simulation=False):
- 
+def runSimulation (excite_portnumbers=None, 
+                   FDTD=None, 
+                   sim_path=None, 
+                   model_basename=None, 
+                   preview_only=None, 
+                   postprocess_only=None, 
+                   force_simulation=False,
+                   settings=None):
+    
+    # This function runs the actual simulation in openEMS
+
+    # This function can be called in two ways: 
+    # 1) by all those positional parameters or 
+    # 2) by passing just FDTD and settings dictionary, where everything is inside the settings dict
+
+    if excite_portnumbers is None:
+        if settings is not None:
+            print('Getting simulation settings from "settings" dictionary')
+            # This is option 2, everything is inside the settings dict and we need to get it from there
+            excite_portnumbers = settings['excite_portnumbers']
+            sim_path           = settings['sim_path']
+            model_basename     = settings['model_basename']
+            preview_only       = settings.get('preview_only',False)
+            postprocess_only   = settings.get('postprocess_only','')
+            force_simulation   = settings.get('force_simulation', False)
+        else:
+            print('If positional parameters are not defined in setupSimulation, you must provide valid "settings" dictionary instead')                
+            exit(1)
+
+        if FDTD is None:
+            print('FDTD must be passed to setupSimulation as named parameter, i.e. "FDTD=FDTD" in parameters')                
+            exit(1)
+
+
     excitation_path = utilities.get_excitation_path (sim_path, excite_portnumbers)
     
     if not postprocess_only:
@@ -312,7 +612,14 @@ def runSimulation (excite_portnumbers, FDTD, sim_path, model_basename, preview_o
         if 1 in excite_portnumbers:  # only for first port excitation
             print('Starting AppCSXCAD 3D viewer with file: \n', CSX_file)
             print('Close AppCSXCAD to continue or press <Ctrl>-C to abort')
-            ret = os.system(AppCSXCAD_BIN + ' "{}"'.format(CSX_file))
+
+            # for Linux, send warningas and errors to nowhere, so that we don't trash console with vtk warnings
+            if os.name == 'posix':
+                suffix = ' 2>/dev/null'
+            else:
+                suffix = ''    
+
+            ret = os.system(AppCSXCAD_BIN + ' "{}"'.format(CSX_file) + suffix)
             if ret != 0:
                 print('[ERROR] AppCSXCAD failed to launch. Exit code: ', ret)
                 sys.exit(1)
@@ -341,11 +648,92 @@ def runSimulation (excite_portnumbers, FDTD, sim_path, model_basename, preview_o
             print('Data for this model already exists, skipping simulation!')
             print('To force re-simulation, add parameter "force_simulation=True" to the runSimulation() call.')
 
+    return excitation_path 
 
-    return excitation_path
+
+def runOpenEMS (excite_ports, settings):
+    # This is the all-in-one simulation function that creates openEMS model and runs all ports, on eafter another
+
+    # get settings from simulation model
+    preview_only = settings.get('preview_only', False)
+    postprocess_only = settings.get('postprocess_only', False)
 
 
-######### end of function createSimulation ()  ##########
+    if not postprocess_only:
+        unit    = settings.get('unit', 1e-6) # unit defaults to micron
+        margin  = settings['margin']   # oversize of dielectric layers relative to drawing
+
+        fstart  = settings['fstart']
+        fstop   = settings['fstop']
+        numfreq = settings.get('numfreq', 401)
+
+        
+        energy_limit = settings['energy_limit']
+        refined_cellsize = settings['refined_cellsize']
+        cells_per_wavelength = settings['cells_per_wavelength']
+        Boundaries = settings['Boundaries']
+
+        simulation_ports = settings['simulation_ports'] 
+        materials_list = settings['materials_list']
+        dielectrics_list = settings['dielectrics_list'] 
+        metals_list = settings['metals_list'] 
+        allpolygons = settings['allpolygons'] 
+
+        sim_path = settings['sim_path'] 
+        model_basename = settings['model_basename'] 
+
+        # calculate wavelength and max_cellsize in project units
+        wavelength_air = 3e8/fstop / unit
+        max_cellsize = (wavelength_air)/(np.sqrt(materials_list.eps_max)*cells_per_wavelength) 
+
+        # define excitation and stop criteria and boundaries
+        FDTD = openEMS(EndCriteria=np.exp(energy_limit/10 * np.log(10)))
+        FDTD.SetGaussExcite( (fstart+fstop)/2, (fstop-fstart)/2 )
+        FDTD.SetBoundaryCond( Boundaries )
+
+        for port in simulation_ports.ports:
+            setupSimulation   ([port.portnumber], 
+                                simulation_ports, 
+                                FDTD, 
+                                materials_list, 
+                                dielectrics_list, 
+                                metals_list, 
+                                allpolygons, 
+                                max_cellsize, 
+                                refined_cellsize, 
+                                margin, 
+                                unit, 
+                                xy_mesh_function=util_meshlines.create_xy_mesh_from_polygons)
+            
+            runSimulation  ([port.portnumber], 
+                                FDTD, 
+                                sim_path, 
+                                model_basename, 
+                                preview_only, 
+                                False)        
+    
+
+        # Initialize an empty matrix for S-parameters
+        num_ports = simulation_ports.portcount
+        s_params = np.empty((num_ports, num_ports, numfreq), dtype=object)
+
+        # Define frequency resolution. Due to FFT from Empire time domain results, 
+        # this is postprocessing and we can change it again at any time.
+        f = np.linspace(fstart, fstop, numfreq)
+
+        # Populate the S-parameter matrix with simulation results
+        for i in range(1, num_ports + 1):
+            for j in range(1, num_ports + 1):
+                s_params[i-1, j-1] = utilities.calculate_Sij(i, j, f, sim_path, simulation_ports)
+
+        # Write to Touchstone *.snp file
+        snp_name = os.path.join(sim_path, model_basename + '.s' + str(num_ports) + 'p')
+        utilities.write_snp(s_params, f, snp_name)
+
+        print('Created S-parameter output file at ', snp_name)
+
+
+
 
 # Utility functions for hash file.
 # By creating and storing a hash of CSX file to the result folder when simulation is finished,

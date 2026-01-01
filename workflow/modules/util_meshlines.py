@@ -19,8 +19,7 @@
 # create mesh lines for metals and dielectrics
 
 import math
-from util_stackup_reader import *
-from util_gds_reader import *
+import numpy as np
 
 def create_z_mesh(mesh, dielectrics_list, metals_list, target_cellsize, max_cellsize, antenna_margin, exclude_list):
 
@@ -74,11 +73,19 @@ def create_z_mesh(mesh, dielectrics_list, metals_list, target_cellsize, max_cell
     
     for metal in metals_list.metals:
         if metal.name not in exclude_list:
-            print('Checking metal layer ', metal.name, ' used:', str(metal.is_used), ' via:', str(metal.is_via))
+            # print('Checking metal layer ', metal.name, ' used:', str(metal.is_used), ' via:', str(metal.is_via))
             if metal.is_used:
                 if not  metal.is_via:
-                    target_cellsize_z = min(target_cellsize, metal.zmax-metal.zmin)
-                    add_equal_meshlines(mesh, 'z', metal.zmin, metal.zmax, target_cellsize_z)
+                    metal_thickness = metal.zmax-metal.zmin
+                    if metal_thickness > 3*target_cellsize:
+                        # for thick metals, we just place mesh lines at top and bottom, and let smoothing do the filling
+                        mesh.AddLine('z', metal.zmin)
+                        mesh.AddLine('z', metal.zmin + target_cellsize)
+                        mesh.AddLine('z', metal.zmax)
+                        mesh.AddLine('z', metal.zmax - target_cellsize)
+                    else:    
+                        target_cellsize_z = min(target_cellsize, metal_thickness)
+                        add_equal_meshlines(mesh, 'z', metal.zmin, metal.zmax, target_cellsize_z)
                 else:
                     # via     
                     mesh.AddLine('z', metal.zmin)
@@ -98,23 +105,20 @@ def create_z_mesh(mesh, dielectrics_list, metals_list, target_cellsize, max_cell
         target_cellsize_z = min(target_cellsize, zmax-zmin)            
 
         if not stackup_layer.metal_inside:
-            if (zmax - zmin) <= 5 * target_cellsize:
-                # thin layer
-                add_equal_meshlines(mesh, 'z', zmin, zmax, target_cellsize_z)
-            else:
-                # check if we have extra marginsg for antenna simulation, then we push out the top and bottom boundary
-                if stackup_layer.dielectric.is_top:
-                    zmax = max(stackup_layer.dielectric.zmax, stackup_layer.dielectric.zmin + antenna_margin)
-                elif stackup_layer.dielectric.is_bottom:
-                    zmin = zmin - antenna_margin
+            # check if we have extra margins for antenna simulation, then we push out the top and bottom boundary
+            if stackup_layer.dielectric.is_top:
+                # zmax = max(stackup_layer.dielectric.zmax, stackup_layer.dielectric.zmin + antenna_margin)
+                zmax = zmax + antenna_margin
+            elif stackup_layer.dielectric.is_bottom:
+                zmin = zmin - antenna_margin
 
-                # place mesh line at interface    
-                mesh.AddLine('z', zmin)
-                mesh.AddLine('z', zmax)
-                if stackup_layer.meshsize_bottom > 0:
-                    mesh.AddLine('z', zmin+stackup_layer.meshsize_bottom)
-                if stackup_layer.meshsize_top > 0:
-                    mesh.AddLine('z', zmin+stackup_layer.meshsize_top)
+            # place mesh line at interface    
+            mesh.AddLine('z', zmin)
+            mesh.AddLine('z', zmax)
+            if stackup_layer.meshsize_bottom > 0:
+                mesh.AddLine('z', zmin+stackup_layer.meshsize_bottom)
+            if stackup_layer.meshsize_top > 0:
+                mesh.AddLine('z', zmin+stackup_layer.meshsize_top)
 
 
 
@@ -160,15 +164,15 @@ def create_standard_xy_mesh(mesh, allpolygons, margin, antenna_margin, target_ce
     oversize = margin + antenna_margin
     
     # geometry region
-    add_equal_meshlines(mesh, 'x', allpolygons.xmin, allpolygons.xmax, target_cellsize)
-    add_equal_meshlines(mesh, 'y', allpolygons.ymin, allpolygons.ymax, target_cellsize)
+    add_equal_meshlines(mesh, 'x', allpolygons.get_xmin(), allpolygons.get_xmax(), target_cellsize)
+    add_equal_meshlines(mesh, 'y', allpolygons.get_ymin(), allpolygons.get_ymax(), target_cellsize)
 
     # margins
-    add_graded_meshlines (mesh, 'x', allpolygons.xmin, allpolygons.xmin - oversize, -1.5*target_cellsize, 1.3, -max_cellsize)
-    add_graded_meshlines (mesh, 'x', allpolygons.xmax, allpolygons.xmax + oversize,  1.5*target_cellsize, 1.3,  max_cellsize)    
+    add_graded_meshlines (mesh, 'x', allpolygons.get_xmin(), allpolygons.get_xmin() - oversize, -1.5*target_cellsize, 1.3, -max_cellsize)
+    add_graded_meshlines (mesh, 'x', allpolygons.get_xmax(), allpolygons.get_xmax() + oversize,  1.5*target_cellsize, 1.3,  max_cellsize)    
     
-    add_graded_meshlines (mesh, 'y', allpolygons.ymin, allpolygons.ymin - oversize, -1.5*target_cellsize, 1.3, -max_cellsize)
-    add_graded_meshlines (mesh, 'y', allpolygons.ymax, allpolygons.ymax + oversize,  1.5*target_cellsize, 1.3,  max_cellsize)    
+    add_graded_meshlines (mesh, 'y', allpolygons.get_ymin(), allpolygons.get_ymin() - oversize, -1.5*target_cellsize, 1.3, -max_cellsize)
+    add_graded_meshlines (mesh, 'y', allpolygons.get_ymax(), allpolygons.get_ymax() + oversize,  1.5*target_cellsize, 1.3,  max_cellsize)    
     
     return mesh
 
@@ -241,17 +245,17 @@ def create_xy_mesh_from_polygons (mesh, allpolygons, margin, antenna_margin, tar
 
     # outer simulation boundary
     oversize = margin 
-    weighted_meshlines_x.addPolyEdge(allpolygons.xmin - oversize)
-    weighted_meshlines_x.addPolyEdge(allpolygons.xmax + oversize)
-    weighted_meshlines_y.addPolyEdge(allpolygons.ymin - oversize)
-    weighted_meshlines_y.addPolyEdge(allpolygons.ymax + oversize)
+    weighted_meshlines_x.addPolyEdge(allpolygons.get_xmin() - oversize)
+    weighted_meshlines_x.addPolyEdge(allpolygons.get_xmax() + oversize)
+    weighted_meshlines_y.addPolyEdge(allpolygons.get_ymin() - oversize)
+    weighted_meshlines_y.addPolyEdge(allpolygons.get_ymax() + oversize)
 
     if antenna_margin>0:
         oversize = margin + antenna_margin
-        weighted_meshlines_x.addPolyEdge(allpolygons.xmin - oversize)
-        weighted_meshlines_x.addPolyEdge(allpolygons.xmax + oversize)
-        weighted_meshlines_y.addPolyEdge(allpolygons.ymin - oversize)
-        weighted_meshlines_y.addPolyEdge(allpolygons.ymax + oversize)
+        weighted_meshlines_x.addPolyEdge(allpolygons.get_xmin() - oversize)
+        weighted_meshlines_x.addPolyEdge(allpolygons.get_xmax() + oversize)
+        weighted_meshlines_y.addPolyEdge(allpolygons.get_ymin() - oversize)
+        weighted_meshlines_y.addPolyEdge(allpolygons.get_ymax() + oversize)
     
 
     # step 1: create lines at all polygon edges
@@ -268,25 +272,30 @@ def create_xy_mesh_from_polygons (mesh, allpolygons, margin, antenna_margin, tar
                 else: # regular polygon   
                     weighted_meshlines_x.addPolyEdge(point)
                 # add small cell left and right
-                if point > allpolygons.xmin:  
+                if point > allpolygons.get_xmin():  
                     weighted_meshlines_x.addFill(point-target_cellsize)
-                if point < allpolygons.xmax:  
+                if point < allpolygons.get_xmax():  
                     weighted_meshlines_x.addFill(point+target_cellsize)
             for point in poly.pts_y:
                 if poly.is_port:  # highest priority in meshing
                     weighted_meshlines_y.addPortEdge(point)
                 else:  # regular polygon     
                     weighted_meshlines_y.addPolyEdge(point)
-                if point > allpolygons.ymin:  
+                if point > allpolygons.get_ymin():  
                     weighted_meshlines_y.addFill(point-target_cellsize)
-                if point < allpolygons.ymax:  
+                if point < allpolygons.get_ymax():  
                     weighted_meshlines_y.addFill(point+target_cellsize)
 
         
         # special case port, the polygon is then a rectangle and we want to insert one extra mesh line in the middle
         if poly.is_port:
-            weighted_meshlines_x.addFill((min(poly.pts_x)+max(poly.pts_x))/2)
-            weighted_meshlines_y.addFill((min(poly.pts_y)+max(poly.pts_y))/2)
+            # get orientation, place extra mesh line along the short axis
+            size_x = poly.xmax - poly.xmin
+            size_y = poly.ymax - poly.ymin
+            if size_x > size_y:
+                weighted_meshlines_y.addFill((min(poly.pts_y)+max(poly.pts_y))/2)
+            else:
+                weighted_meshlines_x.addFill((min(poly.pts_x)+max(poly.pts_x))/2)
         
 
 
@@ -398,8 +407,8 @@ def create_xy_mesh_from_polygons (mesh, allpolygons, margin, antenna_margin, tar
                     mesh.AddLine(direction, point)
     
 
-    add_extra_lines('x', allpolygons.xmin, allpolygons.xmax)
-    add_extra_lines('y', allpolygons.ymin, allpolygons.ymax)
+    add_extra_lines('x', allpolygons.get_xmin(), allpolygons.get_xmax())
+    add_extra_lines('y', allpolygons.get_ymin(), allpolygons.get_ymax())
 
     mesh.SmoothMeshLines('x', max_cellsize, 1.3)
     mesh.SmoothMeshLines('y', max_cellsize, 1.3)
