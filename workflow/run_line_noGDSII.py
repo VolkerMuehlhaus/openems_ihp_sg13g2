@@ -132,7 +132,7 @@ FDTD = simulation_setup.setupSimulation (excite_ports,
                                          xy_mesh_function=util_meshlines.create_xy_mesh_from_polygons,
                                          field_dumps=field_dumps)
 
-sub1_data_path = simulation_setup.runSimulation (excite_ports, FDTD, sim_path, model_basename, preview_only, postprocess_only, preview_first_excitation)
+sub1_data_path = simulation_setup.runSimulation (excite_ports, FDTD, sim_path, model_basename, preview_only, postprocess_only, preview_first_excitation=preview_first_excitation)
 
 
 ########## evaluation of results with composite GSG ports ###########

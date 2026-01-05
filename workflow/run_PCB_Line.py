@@ -171,7 +171,7 @@ for excite_ports in [[1]]:  # list of ports that are excited one after another
         rotHf.AddBox(start, stop)
     
     
-    data_paths.append(simulation_setup.runSimulation (excite_ports, FDTD, sim_path, model_basename, preview_only, postprocess_only, preview_first_excitation))
+    data_paths.append(simulation_setup.runSimulation (excite_ports, FDTD, sim_path, model_basename, preview_only, postprocess_only, preview_first_excitation=preview_first_excitation))
     
 
 
