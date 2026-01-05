@@ -124,7 +124,7 @@ FDTD = simulation_setup.setupSimulation(
 nf2ff_box = FDTD.CreateNF2FFBox(opt_resolution = [max_cellsize]*3, frequency = [ftarget])
 
 # run simulation
-sub1_data_path = simulation_setup.runSimulation(excite_ports, FDTD, sim_path, model_basename, preview_only, postprocess_only)
+sub1_data_path = simulation_setup.runSimulation(excite_ports, FDTD, sim_path, model_basename, preview_only, postprocess_only, preview_first_excitation)
 
 # simulation is finished, get results, CSX port definition is read from simulation ports object
 CSX_port1 = simulation_ports.get_port_by_number(1).CSXport
