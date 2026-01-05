@@ -26,6 +26,8 @@ import numpy as np
 # postprocess existing data without re-running simulation?
 preview_only = False
 postprocess_only = False
+simulate_dumps = False          #Turn this on to allow creation of dumps !!High storage consumption!!
+PreviewFirstExcitation = True   #Turn this on to preview the model for first port excitation
 
 # ===================== input files and path settings =======================
 
