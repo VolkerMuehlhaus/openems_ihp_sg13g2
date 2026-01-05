@@ -116,7 +116,7 @@ for excite_ports in [[1]]:  # list of ports that are excited one after another
                                              unit, 
                                              xy_mesh_function=util_meshlines.create_xy_mesh_from_polygons)
 
-    data_paths.append(simulation_setup.runSimulation (excite_ports, FDTD, sim_path, model_basename, preview_only, postprocess_only))
+    data_paths.append(simulation_setup.runSimulation (excite_ports, FDTD, sim_path, model_basename, preview_only, postprocess_only, preview_first_excitation))
 
 
 # get results, CSX port definition is read from simulation ports object
