@@ -25,6 +25,8 @@ import matplotlib.pyplot as plt
 # postprocess existing data without re-running simulation?
 preview_only = True
 postprocess_only = False
+simulate_dumps = False          #Turn this on to allow creation of dumps !!High storage consumption!!
+preview_first_excitation = True   #Turn this on to preview the model for first port excitation
 
 # ===================== input files and path settings =======================
 
