@@ -121,7 +121,8 @@ FDTD = simulation_setup.setupSimulation (excite_ports,
                                          refined_cellsize, 
                                          margin, 
                                          unit, 
-                                         xy_mesh_function=util_meshlines.create_xy_mesh_from_polygons)
+                                         xy_mesh_function=util_meshlines.create_xy_mesh_from_polygons,
+                                         field_dumps=simulate_dumps)
 
 sub1_data_path = simulation_setup.runSimulation (excite_ports, FDTD, sim_path, model_basename, preview_only, postprocess_only, preview_first_excitation)
 
