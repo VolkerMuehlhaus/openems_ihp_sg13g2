@@ -117,7 +117,8 @@ FDTD = simulation_setup.setupSimulation(
     margin, 
     unit, 
     xy_mesh_function = util_meshlines.create_xy_mesh_from_polygons, 
-    air_around = 0.5*wavelength_air
+    air_around = 0.5*wavelength_air,
+    field_dumps=simulate_dumps
     )
 
 # add nf2ff box for antenna pattern calculation
