@@ -121,7 +121,8 @@ for excite_ports in [[1]]:  # list of ports that are excited one after another
                                              refined_cellsize, 
                                              margin, 
                                              unit, 
-                                             xy_mesh_function=util_meshlines.create_xy_mesh_from_polygons)
+                                             xy_mesh_function=util_meshlines.create_xy_mesh_from_polygons,
+                                             field_dumps=simulate_dumps)
     if simulate_dumps:
         CSX = FDTD.GetCSX()
 
