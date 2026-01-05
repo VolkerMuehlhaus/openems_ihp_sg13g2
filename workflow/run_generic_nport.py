@@ -118,7 +118,8 @@ for port in simulation_ports.ports:
                                         refined_cellsize, 
                                         margin, 
                                         unit, 
-                                        xy_mesh_function=util_meshlines.create_xy_mesh_from_polygons)
+                                        xy_mesh_function=util_meshlines.create_xy_mesh_from_polygons,
+                                        field_dumps=simulate_dumps)
     
     simulation_setup.runSimulation  ([port.portnumber], 
                                         FDTD, 
