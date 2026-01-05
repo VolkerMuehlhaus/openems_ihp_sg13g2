@@ -25,20 +25,20 @@ import numpy as np
 
 
 
+
 # ======================== workflow settings ================================
 settings = {}
 
-# preview model/mesh only?
-# postprocess existing data without re-running simulation?
-settings['preview_only'] = False
-settings['postprocess_only'] = False
+settings['preview_only'] = False  # preview model/mesh only?
+settings['postprocess_only'] = False # postprocess existing data without re-running simulation?
+settings['no_gui'] = False # if set to True, there is no mesh/model preview in AppCSXCAD, and simulation starts immediately. 
 
 # ===================== input files and path settings =======================
 
 gds_filename = "line_simple_viaport.gds"   # geometries
-gds_cellname = ""       # optional: name of tell, remove this to load always top cell
+cellname = ""  # optional, set empty string "" to use top cell 
 
-XML_filename = "SG13G2_nosub_openEMS.xml"  # stackup
+XML_filename = "SG13G2_nosub.xml"          # stackup
 
 # which GDSII data type is evaluated? Values in [] can be separated by comma
 settings['purpose'] = [0]
@@ -120,7 +120,7 @@ allpolygons = gds_reader.read_gds(gds_filename,
                                   metals_list = metals_list, 
                                   preprocess  = settings['preprocess_gds'], 
                                   merge_polygon_size = settings['merge_polygon_size'],
-                                  cellname = gds_cellname)
+                                  cellname=cellname)
 
 
 ########### create model, run and post-process ###########
