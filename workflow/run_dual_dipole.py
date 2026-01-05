@@ -25,6 +25,8 @@ import matplotlib.pyplot as plt
 # postprocess existing data without re-running simulation?
 preview_only = True
 postprocess_only = False
+field_dumps = False          #Turn this on to allow creation of dumps !!High storage consumption!!
+preview_first_excitation = True   #Turn this on to preview the model for first port excitation
 
 # ===================== input files and path settings =======================
 
@@ -85,6 +87,8 @@ materials_list, dielectrics_list, metals_list = stackup_reader.read_substrate (X
 # get list of layers from technology
 layernumbers = metals_list.getlayernumbers()
 layernumbers.extend(simulation_ports.portlayers)
+if field_dumps != False:
+    layernumbers.extend(field_dumps.dumplayers) 
 
 # read geometries from GDSII, only purpose 0
 allpolygons = gds_reader.read_gds(gds_filename, layernumbers, purposelist=[0], metals_list=metals_list, preprocess=preprocess_gds, merge_polygon_size=merge_polygon_size)
@@ -115,14 +119,15 @@ FDTD = simulation_setup.setupSimulation(
     margin, 
     unit, 
     xy_mesh_function = util_meshlines.create_xy_mesh_from_polygons, 
-    air_around = 0.5*wavelength_air
+    air_around = 0.5*wavelength_air,
+    field_dumps=field_dumps
     )
 
 # add nf2ff box for antenna pattern calculation
 nf2ff_box = FDTD.CreateNF2FFBox(opt_resolution = [max_cellsize]*3, frequency = [ftarget])
 
 # run simulation
-sub1_data_path = simulation_setup.runSimulation(excite_ports, FDTD, sim_path, model_basename, preview_only, postprocess_only)
+sub1_data_path = simulation_setup.runSimulation(excite_ports, FDTD, sim_path, model_basename, preview_only, postprocess_only, preview_first_excitation=preview_first_excitation)
 
 # simulation is finished, get results, CSX port definition is read from simulation ports object
 CSX_port1 = simulation_ports.get_port_by_number(1).CSXport

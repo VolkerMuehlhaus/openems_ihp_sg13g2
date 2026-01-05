@@ -25,6 +25,8 @@ import matplotlib.pyplot as plt
 # postprocess existing data without re-running simulation?
 preview_only = True
 postprocess_only = False
+field_dumps = False          #Turn this on to allow creation of dumps !!High storage consumption!!
+preview_first_excitation = True   #Turn this on to preview the model for first port excitation
 
 # ===================== input files and path settings =======================
 
@@ -83,6 +85,8 @@ materials_list, dielectrics_list, metals_list = stackup_reader.read_substrate (X
 # get list of layers from technology
 layernumbers = metals_list.getlayernumbers()
 layernumbers.extend(simulation_ports.portlayers)
+if field_dumps != False:
+    layernumbers.extend(field_dumps.dumplayers) 
 
 # Here, we do NOT load a GDSII file, and create an empty all_polygons_list() instead
 # allpolygons = gds_reader.read_gds(gds_filename, layernumbers, purposelist=[0], metals_list=metals_list, preprocess=preprocess_gds)
@@ -125,9 +129,10 @@ FDTD = simulation_setup.setupSimulation (excite_ports,
                                          refined_cellsize, 
                                          margin, 
                                          unit, 
-                                         xy_mesh_function=util_meshlines.create_xy_mesh_from_polygons)
+                                         xy_mesh_function=util_meshlines.create_xy_mesh_from_polygons,
+                                         field_dumps=field_dumps)
 
-sub1_data_path = simulation_setup.runSimulation (excite_ports, FDTD, sim_path, model_basename, preview_only, postprocess_only)
+sub1_data_path = simulation_setup.runSimulation (excite_ports, FDTD, sim_path, model_basename, preview_only, postprocess_only, preview_first_excitation=preview_first_excitation)
 
 
 ########## evaluation of results with composite GSG ports ###########

@@ -573,7 +573,8 @@ def runSimulation (excite_portnumbers=None,
                    preview_only=None, 
                    postprocess_only=None, 
                    force_simulation=False,
-                   settings=None):
+                   settings=None,
+                   preview_first_excitation=True):
     
     # This function runs the actual simulation in openEMS
 
@@ -609,7 +610,7 @@ def runSimulation (excite_portnumbers=None,
         CSX.Write2XML(CSX_file)
 
         # preview model
-        if 1 in excite_portnumbers:  # only for first port excitation
+        if (1 in excite_portnumbers) and preview_first_excitation:  # only for first port excitation
             print('Starting AppCSXCAD 3D viewer with file: \n', CSX_file)
             print('Close AppCSXCAD to continue or press <Ctrl>-C to abort')
 
