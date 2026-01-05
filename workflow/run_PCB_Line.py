@@ -28,6 +28,7 @@ import matplotlib.pyplot as plt
 preview_only = False
 postprocess_only = True
 simulate_dumps = False          #Turn this on to allow creation of dumps !!High storage consumption!!
+PreviewFirstExcitation = True   #Turn this on to preview the model for first port excitation
 # ===================== input files and path settings =======================
 
 gds_filename = "PCB_Line.gds"   # geometries
