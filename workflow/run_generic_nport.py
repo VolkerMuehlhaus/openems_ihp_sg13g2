@@ -26,7 +26,7 @@ import numpy as np
 # postprocess existing data without re-running simulation?
 preview_only = False
 postprocess_only = False
-simulate_dumps = False          #Turn this on to allow creation of dumps !!High storage consumption!!
+field_dumps = False          #Turn this on to allow creation of dumps !!High storage consumption!!
 preview_first_excitation = True   #Turn this on to preview the model for first port excitation
 
 # ===================== input files and path settings =======================
@@ -88,6 +88,8 @@ materials_list, dielectrics_list, metals_list = stackup_reader.read_substrate (X
 layernumbers = metals_list.getlayernumbers()
 # we must also read the layers where we added ports, these are not included in technology layers
 layernumbers.extend(simulation_ports.portlayers)
+if field_dumps != False:
+    layernumbers.extend(field_dumps.dumplayers) 
 
 # read geometries from GDSII, only purpose 0
 allpolygons = gds_reader.read_gds(gds_filename, layernumbers, purposelist=[0], metals_list=metals_list, preprocess=preprocess_gds, merge_polygon_size=merge_polygon_size)
@@ -119,7 +121,7 @@ for port in simulation_ports.ports:
                                         margin, 
                                         unit, 
                                         xy_mesh_function=util_meshlines.create_xy_mesh_from_polygons,
-                                        field_dumps=simulate_dumps)
+                                        field_dumps=field_dumps)
     
     simulation_setup.runSimulation  ([port.portnumber], 
                                         FDTD, 

@@ -574,7 +574,7 @@ def runSimulation (excite_portnumbers=None,
                    postprocess_only=None, 
                    force_simulation=False,
                    settings=None,
-                   preview_first_excitation=Ture):
+                   preview_first_excitation=True):
     
     # This function runs the actual simulation in openEMS
 

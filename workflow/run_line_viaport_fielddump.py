@@ -29,8 +29,8 @@ import matplotlib.pyplot as plt
 # postprocess existing data without re-running simulation?
 preview_only = False
 postprocess_only = False
-simulate_dumps = False          #Turn this on to allow creation of dumps !!High storage consumption!!
-preview_first_excitation = True   #Turn this on to preview the model for first port excitation
+field_dumps = False          #Turn this on to allow creation of dumps !!High storage consumption!!
+preview_first_excitation = False   #Turn this on to preview the model for first port excitation
 
 # ===================== input files and path settings =======================
 
@@ -89,8 +89,8 @@ simulation_ports.add_port(simulation_setup.simulation_port(portnumber=2, voltage
 # supported dump_type = 'E','H','J','rotH'
 # supported file_type = 'vtk', 'hdf5'
 # z-position is zmax of from_layername, zmin of to_layername
-if simulate_dumps == True:
-    simulate_dumps = simulation_setup.all_field_dumps()
+if field_dumps == True:
+    field_dumps = simulation_setup.all_field_dumps()
     field_dumps.add_frequency_dump(name='Jf', file_type='vtk', dump_type='J', frequency=30e9, source_layernum=301, from_layername='TopMetal2', to_layername='TopMetal2', offset_top=0, offset_bottom=0)
     field_dumps.add_time_dump(name='Et', file_type='vtk', dump_type='E', source_layernum=302, from_layername='Metal1', to_layername='TopMetal2', offset_top=10, offset_bottom=0)
 
@@ -102,7 +102,8 @@ materials_list, dielectrics_list, metals_list = stackup_reader.read_substrate (X
 # get list of layers from technology
 layernumbers = metals_list.getlayernumbers()
 layernumbers.extend(simulation_ports.portlayers)
-layernumbers.extend(field_dumps.dumplayers) 
+if field_dumps != False:
+    layernumbers.extend(field_dumps.dumplayers) 
 
 # read geometries from GDSII, only purpose 0
 allpolygons = gds_reader.read_gds(gds_filename, layernumbers, purposelist=[0], metals_list=metals_list, preprocess=preprocess_gds, merge_polygon_size=merge_polygon_size)
@@ -133,7 +134,7 @@ FDTD = simulation_setup.setupSimulation (excite_ports,
                                          margin, 
                                          unit, 
                                          xy_mesh_function=util_meshlines.create_xy_mesh_from_polygons,
-                                         field_dumps=simulate_dumps)
+                                         field_dumps=field_dumps)
 
 
 
