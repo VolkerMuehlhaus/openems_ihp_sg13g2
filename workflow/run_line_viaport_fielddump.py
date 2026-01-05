@@ -28,8 +28,8 @@ import matplotlib.pyplot as plt
 # preview model/mesh only?
 # postprocess existing data without re-running simulation?
 preview_only = False
-postprocess_only = False
-field_dumps = False          #Turn this on to allow creation of dumps !!High storage consumption!!
+postprocess_only = True
+field_dumps = True          #Turn this on to allow creation of dumps !!High storage consumption!!
 preview_first_excitation = False   #Turn this on to preview the model for first port excitation
 
 # ===================== input files and path settings =======================
@@ -138,7 +138,7 @@ FDTD = simulation_setup.setupSimulation (excite_ports,
 
 
 
-sub1_data_path = simulation_setup.runSimulation (excite_ports, FDTD, sim_path, model_basename, preview_only, postprocess_only, preview_first_excitation)
+sub1_data_path = simulation_setup.runSimulation (excite_ports, FDTD, sim_path, model_basename, preview_only, postprocess_only, preview_first_excitation=preview_first_excitation)
 
 
 ########## evaluation of results with composite GSG ports ###########
