@@ -125,7 +125,8 @@ for port in simulation_ports.ports:
                                         sim_path, 
                                         model_basename, 
                                         preview_only, 
-                                        postprocess_only)
+                                        postprocess_only,
+                                        preview_first_excitation)
 
 
 # Initialize an empty matrix for S-parameters
