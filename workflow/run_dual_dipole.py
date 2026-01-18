@@ -17,19 +17,19 @@ import matplotlib.pyplot as plt
 # Dual dipole 245 GHz, design by IHP Klaus Schmalz
 # Port defined in GDSIIfile on layer 201
 # nf2ff_box field sampling at boundary for pattern calculation
-
+# Model update Jan-2026: used MUR boundary instead of PML8 for faster simulation, removed extra margin required for PML
 
 # ======================== workflow settings ================================
 
 # preview model/mesh only?
 # postprocess existing data without re-running simulation?
-preview_only = True
+preview_only = False
 postprocess_only = False
 
 # ===================== input files and path settings =======================
 
 gds_filename = "dipole_port_sg13.gds"   # geometries
-XML_filename = "SG13G2_200um.xml"       # stackup
+XML_filename = "SG13G2_200um_backsideGND.xml"       # stackup
 
 # preprocess GDSII for safe handling of cutouts/holes?
 preprocess_gds = True
@@ -68,7 +68,7 @@ refined_cellsize = 2.5  # mesh cell size in conductor region
 # 'PMC' : perfect magnetic conductor, useful for symmetries
 # 'MUR' : simple MUR absorbing boundary conditions
 # 'PML_8' : PML absorbing boundary conditions
-Boundaries = ['PML_8', 'PML_8', 'PML_8', 'PML_8', 'PML_8', 'PML_8']
+Boundaries = ['MUR', 'MUR', 'MUR', 'MUR', 'MUR', 'MUR']
 
 cells_per_wavelength = 12   # how many mesh cells per wavelength, must be 10 or more
 energy_limit = -40          # end criteria for residual energy (dB)
@@ -220,3 +220,4 @@ if not preview_only:
 
     # show all plots
     plt.show()
+    
