@@ -573,6 +573,7 @@ def runSimulation (excite_portnumbers=None,
                    preview_only=None, 
                    postprocess_only=None, 
                    force_simulation=False,
+                   no_gui = False,
                    settings=None):
     
     # This function runs the actual simulation in openEMS
@@ -591,6 +592,7 @@ def runSimulation (excite_portnumbers=None,
             preview_only       = settings.get('preview_only',False)
             postprocess_only   = settings.get('postprocess_only','')
             force_simulation   = settings.get('force_simulation', False)
+            no_gui             = settings.get('no_gui', False)
         else:
             print('If positional parameters are not defined in setupSimulation, you must provide valid "settings" dictionary instead')                
             exit(1)
@@ -598,6 +600,12 @@ def runSimulation (excite_portnumbers=None,
         if FDTD is None:
             print('FDTD must be passed to setupSimulation as named parameter, i.e. "FDTD=FDTD" in parameters')                
             exit(1)
+
+    # If no_gui is enabled, always start simulation even if preview_only is True
+    # and force re-simulation, even if results already exist
+    if no_gui:
+        preview_only = False
+        postprocess_only = False
 
 
     excitation_path = utilities.get_excitation_path (sim_path, excite_portnumbers)
@@ -609,7 +617,7 @@ def runSimulation (excite_portnumbers=None,
         CSX.Write2XML(CSX_file)
 
         # preview model
-        if 1 in excite_portnumbers:  # only for first port excitation
+        if 1 in excite_portnumbers and not no_gui:  # only for first port excitation
             print('Starting AppCSXCAD 3D viewer with file: \n', CSX_file)
             print('Close AppCSXCAD to continue or press <Ctrl>-C to abort')
 
