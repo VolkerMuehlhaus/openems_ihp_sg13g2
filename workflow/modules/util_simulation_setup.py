@@ -593,16 +593,17 @@ def setupSimulation (excite_portnumbers=None,
     FDTD.SetCSX(CSX)
 
     # check if easyMesh is enabled
-    if settings.get('easyMesh', False):
-        # load easyMesh module
-        from easyMesh import enhance_csx_for_auto_mesh, enhance_FDTD_for_auto_mesh
-        # configure easyMesh
-        primitives_mesh_setup = {}
-        properties_mesh_setup = {}
-        CSX = enhance_csx_for_auto_mesh(CSX, primitives_mesh_setup)
-        FDTD = enhance_FDTD_for_auto_mesh(FDTD, primitives_mesh_setup)        
-        xy_mesh_function=util_meshlines.create_xy_using_autoMesh
-        z_mesh_function=util_meshlines.create_z_using_autoMesh
+    if settings is not None:
+        if settings.get('easyMesh', False):
+            # load easyMesh module
+            from easyMesh import enhance_csx_for_auto_mesh, enhance_FDTD_for_auto_mesh
+            # configure easyMesh
+            primitives_mesh_setup = {}
+            properties_mesh_setup = {}
+            CSX = enhance_csx_for_auto_mesh(CSX, primitives_mesh_setup)
+            FDTD = enhance_FDTD_for_auto_mesh(FDTD, primitives_mesh_setup)        
+            xy_mesh_function=util_meshlines.create_xy_using_autoMesh
+            z_mesh_function=util_meshlines.create_z_using_autoMesh
 
 
     # add geometries and return list of used materials
@@ -628,7 +629,10 @@ def setupSimulation (excite_portnumbers=None,
             poly.is_via = metal.is_via
 
     # add mesh
-    if settings.get('easyMesh', False):    
+    easyMesh = False
+    if settings is not None:
+        easyMesh = settings.get('easyMesh', False)
+    if easyMesh:        
         mesh = addMesh_to_CSX (CSX, allpolygons, dielectrics_list, metals_list, refined_cellsize, max_cellsize, margin, air_around, unit, z_mesh_function, xy_mesh_function, primitives_mesh_setup=primitives_mesh_setup, properties_mesh_setup=properties_mesh_setup, settings=settings )
     else:    
         mesh = addMesh_to_CSX (CSX, allpolygons, dielectrics_list, metals_list, refined_cellsize, max_cellsize, margin, air_around, unit, z_mesh_function, xy_mesh_function)
