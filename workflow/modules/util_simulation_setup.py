@@ -485,16 +485,14 @@ def addMesh_to_CSX (CSX, allpolygons, dielectrics_list, metals_list, refined_cel
     # meshing of dielectrics and metals
     no_z_mesh_list = [] # exclude from meshing, specify stackup layer name here
 
-    # mesh using autoMesh module requires extra parameters
-    if xy_mesh_function==util_meshlines.create_xy_using_autoMesh:
-        mesh = z_mesh_function (mesh, dielectrics_list, metals_list, refined_cellsize, max_cellsize, air_around, no_z_mesh_list, primitives_mesh_setup, properties_mesh_setup, settings)
-    else:
+    if z_mesh_function is not None:
+        # not used when using easyMesh module, which does xyz meshing all togerther in one call
         mesh = z_mesh_function (mesh, dielectrics_list, metals_list, refined_cellsize, max_cellsize, air_around, no_z_mesh_list)
-        
 
-    if z_mesh_function==util_meshlines.create_z_using_autoMesh:
-        mesh = xy_mesh_function (mesh, allpolygons, margin, air_around, refined_cellsize, max_cellsize, primitives_mesh_setup, properties_mesh_setup, settings)
-    else:        
+    # mesh using easyMesh module requires extra parameters
+    if xy_mesh_function==util_meshlines.create_xy_using_autoMesh:
+        mesh = xy_mesh_function (CSX, dielectrics_list, metals_list, refined_cellsize, max_cellsize, air_around, no_z_mesh_list, primitives_mesh_setup, properties_mesh_setup, settings)
+    else:
         mesh = xy_mesh_function (mesh, allpolygons, margin, air_around, refined_cellsize, max_cellsize)
 
     return mesh
@@ -596,15 +594,20 @@ def setupSimulation (excite_portnumbers=None,
     if settings is not None:
         if settings.get('easyMesh', False):
             # load easyMesh module
-            from easyMesh import enhance_csx_for_auto_mesh, enhance_FDTD_for_auto_mesh
-            # configure easyMesh
-            primitives_mesh_setup = {}
-            properties_mesh_setup = {}
-            CSX = enhance_csx_for_auto_mesh(CSX, primitives_mesh_setup)
-            FDTD = enhance_FDTD_for_auto_mesh(FDTD, primitives_mesh_setup)        
-            xy_mesh_function=util_meshlines.create_xy_using_autoMesh
-            z_mesh_function=util_meshlines.create_z_using_autoMesh
-
+            try: 
+                from easyMesh import enhance_csx_for_auto_mesh, enhance_FDTD_for_auto_mesh
+                # configure easyMesh
+                primitives_mesh_setup = {}
+                properties_mesh_setup = {}
+                CSX = enhance_csx_for_auto_mesh(CSX, primitives_mesh_setup)
+                FDTD = enhance_FDTD_for_auto_mesh(FDTD, primitives_mesh_setup)        
+                xy_mesh_function=util_meshlines.create_xy_using_autoMesh
+                z_mesh_function=None
+            except ImportError:
+                # easymesh module not found
+                print("\n\nERROR: could not load Python module easyMesh, available at https://github.com/MustafaAlchalabi/easyMesh4openEMS")    
+                print("==> settings['easyMesh']=True is ignored until you install that module!\n\n")
+                settings['easyMesh']=False
 
     # add geometries and return list of used materials
     CSX, CSX_materials_list = addGeometry_to_CSX (CSX, excite_portnumbers,simulation_ports,FDTD, materials_list, dielectrics_list, metals_list, allpolygons)

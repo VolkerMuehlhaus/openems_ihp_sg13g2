@@ -457,7 +457,7 @@ def create_xy_using_autoMesh(CSX, allpolygons, simulation_ports, margin, antenna
     # load easyMesh module
     from easyMesh import GenerateMesh
 
-    # configure easyMesh
+    # configure easyMesh for xyz direction (no separate call for z direction!)
     global_mesh_setup = {
         'drawing_unit': settings['unit'],  # geometry is in microns
         'start_frequency': settings['fstart'],
@@ -467,36 +467,14 @@ def create_xy_using_autoMesh(CSX, allpolygons, simulation_ports, margin, antenna
         'boundary_distance': settings.get('boundary_distance', [None, None, None, None, None, None]), # value, 'auto' or None
         'handle_closely_placed_edges': settings.get('handle_closely_placed_edges', True),  # if True, then mesher will try to handle close placed edges by merging them
         'min_cellsize': settings.get('refined_cellsize', 1),
-        'dirs': 'xy'
+        'dirs': 'xyz'
     }
 
     GenerateMesh(CSX, global_mesh_setup, primitives_mesh_setup, properties_mesh_setup)
     mesh = CSX.GetGrid()
     return mesh
 
-
-
-def create_z_using_autoMesh(CSX, allpolygons, simulation_ports, margin, antenna_margin, target_cellsize, max_cellsize, primitives_mesh_setup, properties_mesh_setup, settings):
-    
-    # load easyMesh module
-    from easyMesh import GenerateMesh
-
-    # configure easyMesh
-    global_mesh_setup = {
-        'drawing_unit': settings['unit'],  # geometry is in microns
-        'start_frequency': settings['fstart'],
-        'stop_frequency': settings['fstop'],
-        'mesh_resolution': settings.get('mesh_resolution','medium'), # 'low', 'medium', 'high', 'very_high'
-        'use_circle_detection': settings.get('use_circle_detection', False), 
-        'boundary_distance': settings.get('boundary_distance', [None, None, None, None, None, None]), # value, 'auto' or None
-        'handle_closely_placed_edges': settings.get('handle_closely_placed_edges', True),  # if True, then mesher will try to handle close placed edges by merging them
-        'min_cellsize': 0.1,  # for stackup in z direction
-        'dirs': 'z'
-    }
-
-    GenerateMesh(CSX, global_mesh_setup, primitives_mesh_setup, properties_mesh_setup)
-    mesh = CSX.GetGrid()
-    return mesh
+# no need for separate z mesh function, that is all done in create_xyz_using_autoMesh
 
 # ------------------- internal utilities -------------------------
 
