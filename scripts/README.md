@@ -2,6 +2,10 @@ These scripts support the workflow when using openEMS.
 
 **deembed_openEMS.py** is a script to deembed parasitic inductance of ports by cascading negative series L at each port. Output is written to a new file with suffix "_deembedded". 
 
+Requirements:
+
+To use this script, Python module scikit-rf must be installed.
+
 Usage:
 
 `
