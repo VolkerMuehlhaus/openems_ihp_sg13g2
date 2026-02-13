@@ -19,6 +19,7 @@
 
 import os
 import sys
+import json
 
 from . import util_utilities as utilities
 from . import util_meshlines
@@ -29,6 +30,9 @@ from openEMS import openEMS
 from openEMS.physical_constants import *
 
 import numpy as np
+
+# global variable for port metadata information
+all_port_information_struct = {}
 
 
 class simulation_port:
@@ -267,8 +271,12 @@ def addGeometry_to_CSX (CSX, excite_portnumbers,simulation_ports,FDTD, materials
                             CSX_material.SetColor('#' + material.color, 255)  # transparency value 255 = solid
 
                     # add Polygon to CSX 
-                    # remember value for MA meshing algorithm, which works on CSX polygons rather than our GDS polygons
-                    p = CSX_material.AddLinPoly(priority=200, points=poly.pts, norm_dir ='z', elevation=metal.zmin, length=metal.thickness)
+                    # remember value for optional easyMesh meshing algorithm, which works on CSX polygons rather than our GDS polygons
+                    # use different prio for metal and via here, because easyMesh evaluates that to prioritize closely spaced edges
+                    if metal.is_via:
+                        p = CSX_material.AddLinPoly(priority=50, points=poly.pts, norm_dir ='z', elevation=metal.zmin, length=metal.thickness)
+                    else:    
+                        p = CSX_material.AddLinPoly(priority=200, points=poly.pts, norm_dir ='z', elevation=metal.zmin, length=metal.thickness)
                     poly.CSXpoly = p
 
                 else:
@@ -347,6 +355,9 @@ def addPorts_to_CSX (CSX, excite_portnumbers,simulation_ports,FDTD, materials_li
     # hold CSX material definitions, but only for stackup materials that are actually used
     CSX_materials_list = {}
 
+    # data structure that we write to Palace output directory with information about port Z0 and port dimensions
+    all_port_information = []
+
     # add geometries on metal and via layers
     for poly in allpolygons.polygons:
         # each poly knows its layer number
@@ -361,8 +372,15 @@ def addPorts_to_CSX (CSX, excite_portnumbers,simulation_ports,FDTD, materials_li
                 # mark polygon for special handling in meshing
                 poly.is_port = True 
 
+                # information for port metadata file
+                port_information_data = {}
+                port_information_data['portnumber'] = port.portnumber
+                port_information_data['Z0'] = port.port_Z0
+                port_information_data['direction'] = port.direction.upper()
+
+
                 portnum = port.portnumber
-                port_direction = port.direction
+                port_direction = port.direction.lower()
                 port_Z0 = port.port_Z0
                 if portnum in excite_portnumbers: # list of excited ports, this can be more than one port number for GSG with composite ports
                     voltage = port.voltage        # only apply source voltage to ports that are excited in this simulation run
@@ -385,6 +403,16 @@ def addPorts_to_CSX (CSX, excite_portnumbers,simulation_ports,FDTD, materials_li
                     port_metal = metals_list.getbylayername(port.target_layername)
                     zmin = port_metal.zmin
                     zmax = port_metal.zmax
+
+                    if 'X' in port.direction.upper():
+                        length = xmax-xmin
+                        width  = ymax-ymin
+                    else:    
+                        length = ymax-ymin
+                        width  = xmax-xmin
+                    port_information_data['length'] = length                           
+                    port_information_data['width']  = width      
+
                 else:
                     # via port 
                     if port.from_layername == 'GND': # special case bottom of simulation box
@@ -419,25 +447,57 @@ def addPorts_to_CSX (CSX, excite_portnumbers,simulation_ports,FDTD, materials_li
                         zmin = zmax_to
                         zmax = zmin_from
 
+                    # for port metadata of via ports, check if port is wider in x or y direction
+                    size_x = xmax - xmin
+                    size_y = ymax - ymin 
+                    if size_y > size_x:
+                        width = size_y
+                    else: 
+                        width = size_x
+
+                    # for via port, length is size in z direction
+                    length = zmax-zmin
+                    port_information_data['length'] = length                            
+                    port_information_data['width']  = width      
+
+                port_information_data['xmin'] = xmin                           
+                port_information_data['xmax'] = xmax      
+                port_information_data['ymin'] = ymin                           
+                port_information_data['ymax'] = ymax      
+                port_information_data['zmin'] = zmin                           
+                port_information_data['zmax'] = zmax      
+
+                all_port_information.append(port_information_data)
+
+
                 CSX_port = FDTD.AddLumpedPort(portnum, port_Z0, [xmin, ymin, zmin], [xmax, ymax, zmax], port_direction, voltage, priority=150)
                 # store CSX_port in the port object, for evaluation later
                 port.set_CSXport(CSX_port)
                     
-
+        # store port metadata for use by external de-embedding algorithm
+        all_port_information_struct['ports'] = all_port_information
 
     return CSX
 
 
 
-def addMesh_to_CSX (CSX, allpolygons, dielectrics_list, metals_list, refined_cellsize, max_cellsize, margin, air_around, unit, z_mesh_function, xy_mesh_function):
+def addMesh_to_CSX (CSX, allpolygons, dielectrics_list, metals_list, refined_cellsize, max_cellsize, margin, air_around, unit, z_mesh_function, xy_mesh_function, primitives_mesh_setup=None, properties_mesh_setup=None, settings=None):
 # Add mesh using default method
     mesh = CSX.GetGrid()
     mesh.SetDeltaUnit(unit)
 
     # meshing of dielectrics and metals
     no_z_mesh_list = [] # exclude from meshing, specify stackup layer name here
-    mesh = z_mesh_function (mesh, dielectrics_list, metals_list, refined_cellsize, max_cellsize, air_around, no_z_mesh_list)
-    mesh = xy_mesh_function (mesh, allpolygons, margin, air_around, refined_cellsize, max_cellsize)
+
+    if z_mesh_function is not None:
+        # not used when using easyMesh module, which does xyz meshing all togerther in one call
+        mesh = z_mesh_function (mesh, dielectrics_list, metals_list, refined_cellsize, max_cellsize, air_around, no_z_mesh_list)
+
+    # mesh using easyMesh module requires extra parameters
+    if xy_mesh_function==util_meshlines.create_xy_using_easyMesh:
+        mesh = xy_mesh_function (CSX, dielectrics_list, metals_list, refined_cellsize, max_cellsize, air_around, no_z_mesh_list, primitives_mesh_setup, properties_mesh_setup, settings)
+    else:
+        mesh = xy_mesh_function (mesh, allpolygons, margin, air_around, refined_cellsize, max_cellsize)
 
     return mesh
 
@@ -478,7 +538,7 @@ def setupSimulation (excite_portnumbers=None,
                      margin=None, 
                      unit=None, 
                      z_mesh_function=util_meshlines.create_z_mesh, 
-                     xy_mesh_function=util_meshlines.create_standard_xy_mesh, 
+                     xy_mesh_function=util_meshlines.create_xy_mesh_from_polygons, 
                      air_around=0, 
                      field_dumps=False,
                      settings=None):
@@ -531,20 +591,41 @@ def setupSimulation (excite_portnumbers=None,
             exit(1)
 
 
-
     CSX = ContinuousStructure()
     FDTD.SetCSX(CSX)
+
+    # check if easyMesh is enabled
+    if settings is not None:
+        if settings.get('easyMesh', False):
+            # load easyMesh module
+            try: 
+                from easyMesh import enhance_csx_for_auto_mesh, enhance_FDTD_for_auto_mesh
+                # configure easyMesh
+                primitives_mesh_setup = {}
+                properties_mesh_setup = {}
+                CSX = enhance_csx_for_auto_mesh(CSX, primitives_mesh_setup)
+                FDTD = enhance_FDTD_for_auto_mesh(FDTD, primitives_mesh_setup)        
+                xy_mesh_function=util_meshlines.create_xy_using_easyMesh
+                z_mesh_function=None
+            except ImportError:
+                # easymesh module not found
+                print("\n\nERROR: could not load Python module easyMesh, available at https://github.com/MustafaAlchalabi/easyMesh4openEMS")    
+                print("==> settings['easyMesh']=True is ignored until you install that module!\n\n")
+                settings['easyMesh']=False
 
     # add geometries and return list of used materials
     CSX, CSX_materials_list = addGeometry_to_CSX (CSX, excite_portnumbers,simulation_ports,FDTD, materials_list, dielectrics_list, metals_list, allpolygons)
     CSX, CSX_materials_list = addDielectrics_to_CSX (CSX, CSX_materials_list,  materials_list, dielectrics_list, allpolygons, margin, addPEC=False)
 
-    # add ports
-    CSX  = addPorts_to_CSX (CSX, excite_portnumbers,simulation_ports,FDTD, materials_list, dielectrics_list, metals_list, allpolygons)
+    # add ports, return CSX and port metadata for saving to JSON
+    CSX = addPorts_to_CSX (CSX, excite_portnumbers,simulation_ports,FDTD, materials_list, dielectrics_list, metals_list, allpolygons)
 
+    # add units and model name to port information metadata
+    all_port_information_struct['unit'] = unit
+    
     # check which layers are actually used, this information is required for meshing in z direction
     # mark if polygon is a via
-    if metals_list != None: 
+    if metals_list is not None: 
       for poly in allpolygons.polygons:
         layernum = poly.layernum
         metal = metals_list.getbylayernumber(layernum)
@@ -555,9 +636,16 @@ def setupSimulation (excite_portnumbers=None,
             poly.is_via = metal.is_via
 
     # add mesh
-    mesh = addMesh_to_CSX (CSX, allpolygons, dielectrics_list, metals_list, refined_cellsize, max_cellsize, margin, air_around, unit, z_mesh_function, xy_mesh_function )
+    easyMesh = False
+    if settings is not None:
+        easyMesh = settings.get('easyMesh', False)
+    if easyMesh:        
+        mesh = addMesh_to_CSX (CSX, allpolygons, dielectrics_list, metals_list, refined_cellsize, max_cellsize, margin, air_around, unit, z_mesh_function, xy_mesh_function, primitives_mesh_setup=primitives_mesh_setup, properties_mesh_setup=properties_mesh_setup, settings=settings )
+    else:    
+        mesh = addMesh_to_CSX (CSX, allpolygons, dielectrics_list, metals_list, refined_cellsize, max_cellsize, margin, air_around, unit, z_mesh_function, xy_mesh_function)
 
-    if field_dumps != False:
+
+    if field_dumps is not False:
         addFielddumps_to_CSX (FDTD, CSX, field_dumps, allpolygons, metals_list)
 
     # display mesh information (line count and smallest mesh cells)
@@ -609,8 +697,18 @@ def runSimulation (excite_portnumbers=None,
         postprocess_only = False
 
 
+    # Write JSON with port information to simulation data directory, used for external de-embedding
+    # This might be called multiple times if there are multiple excitations, but never mind ...
+    port_information_file = os.path.join(sim_path, 'port_information.json')
+    print('Creating port information metadata file ', port_information_file)
+    all_port_information_struct['name'] = model_basename 
+    with open(port_information_file, 'w', encoding='utf-8') as f:
+        json.dump(all_port_information_struct, f, ensure_ascii=False, indent=4)
+    f.close()
+
+
     excitation_path = utilities.get_excitation_path (sim_path, excite_portnumbers)
-    
+
     if not postprocess_only:
         # write CSX file 
         CSX_file = os.path.join(excitation_path, model_basename + '.xml')
@@ -622,7 +720,7 @@ def runSimulation (excite_portnumbers=None,
             print('Starting AppCSXCAD 3D viewer with file: \n', CSX_file)
             print('Close AppCSXCAD to continue or press <Ctrl>-C to abort')
 
-            # for Linux, send warningas and errors to nowhere, so that we don't trash console with vtk warnings
+            # for Linux, send warnings and errors to nowhere, so that we don't trash console with vtk warnings
             if os.name == 'posix':
                 suffix = ' 2>/dev/null'
             else:
@@ -632,7 +730,7 @@ def runSimulation (excite_portnumbers=None,
             if ret != 0:
                 print('[ERROR] AppCSXCAD failed to launch. Exit code: ', ret)
                 sys.exit(1)
-
+   
     if not (preview_only or postprocess_only):  # start simulation 
         # Check if we can read a hash file from the result folder
         existing_data_hash = get_hash_from_data_folder(excitation_path)
