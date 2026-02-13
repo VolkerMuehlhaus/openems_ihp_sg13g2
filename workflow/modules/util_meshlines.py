@@ -452,7 +452,7 @@ def create_xy_mesh_from_polygons (mesh, allpolygons, margin, antenna_margin, tar
 
 # ------------------- Mesh using autoMesh module -------------------------
 
-def create_xy_using_autoMesh(CSX, allpolygons, simulation_ports, margin, antenna_margin, target_cellsize, max_cellsize, primitives_mesh_setup, properties_mesh_setup, settings):
+def create_xy_using_easyMesh(CSX, allpolygons, simulation_ports, margin, antenna_margin, target_cellsize, max_cellsize, primitives_mesh_setup, properties_mesh_setup, settings):
     
     # load easyMesh module
     from easyMesh import GenerateMesh

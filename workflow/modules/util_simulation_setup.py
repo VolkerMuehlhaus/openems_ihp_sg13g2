@@ -271,8 +271,12 @@ def addGeometry_to_CSX (CSX, excite_portnumbers,simulation_ports,FDTD, materials
                             CSX_material.SetColor('#' + material.color, 255)  # transparency value 255 = solid
 
                     # add Polygon to CSX 
-                    # remember value for MA meshing algorithm, which works on CSX polygons rather than our GDS polygons
-                    p = CSX_material.AddLinPoly(priority=200, points=poly.pts, norm_dir ='z', elevation=metal.zmin, length=metal.thickness)
+                    # remember value for optional easyMesh meshing algorithm, which works on CSX polygons rather than our GDS polygons
+                    # use different prio for metal and via here, because easyMesh evaluates that to prioritize closely spaced edges
+                    if metal.is_via:
+                        p = CSX_material.AddLinPoly(priority=50, points=poly.pts, norm_dir ='z', elevation=metal.zmin, length=metal.thickness)
+                    else:    
+                        p = CSX_material.AddLinPoly(priority=200, points=poly.pts, norm_dir ='z', elevation=metal.zmin, length=metal.thickness)
                     poly.CSXpoly = p
 
                 else:
@@ -490,7 +494,7 @@ def addMesh_to_CSX (CSX, allpolygons, dielectrics_list, metals_list, refined_cel
         mesh = z_mesh_function (mesh, dielectrics_list, metals_list, refined_cellsize, max_cellsize, air_around, no_z_mesh_list)
 
     # mesh using easyMesh module requires extra parameters
-    if xy_mesh_function==util_meshlines.create_xy_using_autoMesh:
+    if xy_mesh_function==util_meshlines.create_xy_using_easyMesh:
         mesh = xy_mesh_function (CSX, dielectrics_list, metals_list, refined_cellsize, max_cellsize, air_around, no_z_mesh_list, primitives_mesh_setup, properties_mesh_setup, settings)
     else:
         mesh = xy_mesh_function (mesh, allpolygons, margin, air_around, refined_cellsize, max_cellsize)
@@ -601,7 +605,7 @@ def setupSimulation (excite_portnumbers=None,
                 properties_mesh_setup = {}
                 CSX = enhance_csx_for_auto_mesh(CSX, primitives_mesh_setup)
                 FDTD = enhance_FDTD_for_auto_mesh(FDTD, primitives_mesh_setup)        
-                xy_mesh_function=util_meshlines.create_xy_using_autoMesh
+                xy_mesh_function=util_meshlines.create_xy_using_easyMesh
                 z_mesh_function=None
             except ImportError:
                 # easymesh module not found
