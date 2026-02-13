@@ -23,18 +23,19 @@
       <Material Name="AIR" Type="Dielectric" Permittivity="1.0" DielectricLossTangent="0.0" Conductivity="0" Color="d0d0d0"/>
       <Material Name="LOWLOSS" Type="Conductor" Permittivity="1" DielectricLossTangent="0" Conductivity="1E10" Color="ff0000"/>
       <Material Name="MIM_equiv" Type="Dielectric" Permittivity="16.87" DielectricLossTangent="0.0" Conductivity="0" Color="ff0000"/>
-			<!-- MIM comment: To avoid small FDTD timestep, thickness and permittivity of MIM dielectric are increased, for same target value 1.5 fF/um^2 -->  
-		</Materials>
+  		<!-- MIM comment: To avoid small FDTD timestep, thickness and permittivity of MIM dielectric are increased, for same target value 1.5 fF/um^2 -->  
+    </Materials>
     <ELayers LengthUnit="um">
       <Dielectrics>
-        <Dielectric Name="AIR" Material="AIR" Thickness="300.0000" />
+        <Dielectric Name="AIR" Material="AIR" Thickness="200.0000" />
         <Dielectric Name="Passive" Material="Passive" Thickness="0.4000" />
         <Dielectric Name="SiO2" Material="SiO2" Thickness="15.7303" />
         <Dielectric Name="EPI" Material="EPI" Thickness="3.7500" />
-        <Dielectric Name="Substrate" Material="Substrate" Thickness="280.0000" />
+        <Dielectric Name="Substrate" Material="Substrate" Thickness="180.0000" />
+        <Dielectric Name="Backsidemetal" Material="LOWLOSS" Thickness="1" />
       </Dielectrics>
       <Layers>
-        <Substrate Offset="283.75"/>
+        <Substrate Offset="184.75"/>
         <Layer Name="Activ" Type="conductor" Zmin="0.0000" Zmax="0.4000" Material="Activ" Layer="1" />
         <Layer Name="Metal1" Type="conductor" Zmin="1.0400" Zmax="1.4600" Material="Metal1" Layer="8" />
         <Layer Name="Metal2" Type="conductor" Zmin="2.0000" Zmax="2.4900" Material="Metal2" Layer="10" />
@@ -50,7 +51,7 @@
         <Layer Name="Via2" Type="via" Zmin="2.4900" Zmax="3.0300" Material="Via2" Layer="29" />
         <Layer Name="Via1" Type="via" Zmin="1.4600" Zmax="2.0000" Material="Via1" Layer="19" />
         <Layer Name="Cont" Type="via" Zmin="0.4000" Zmax="1.0400" Material="Cont" Layer="6" />
-        <Layer Name="LBE" Type="via" Zmin="-283.7500" Zmax="0.0000" Material="AIR" Layer="157" />
+        <Layer Name="LBE" Type="via" Zmin="-183.7500" Zmax="0.0000" Material="AIR" Layer="157" />
         <Layer Name="SUBGND" Type="via" Zmin="-3.75" Zmax="0" Material="LOWLOSS" Layer="210" />
         <Layer Name="MIM_DK" Type="conductor" Zmin="5.5800" Zmax="5.6800" Material="MIM_equiv" Layer="36" />
         <Layer Name="MIM" Type="conductor" Zmin="5.6800" Zmax="6.4303" Material="TopVia1" Layer="36" />
