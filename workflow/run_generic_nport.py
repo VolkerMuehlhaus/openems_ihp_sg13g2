@@ -1,12 +1,8 @@
 import os
 import sys
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), 'modules')))
 
-import modules.util_stackup_reader as stackup_reader
-import modules.util_gds_reader as gds_reader
-import modules.util_utilities as utilities
-import modules.util_simulation_setup as simulation_setup
-import modules.util_meshlines as util_meshlines
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), 'modules')))
+from modules import *
 
 from openEMS import openEMS
 import numpy as np
@@ -22,10 +18,9 @@ import numpy as np
 
 # ======================== workflow settings ================================
 
-# preview model/mesh only?
-# postprocess existing data without re-running simulation?
-preview_only = False
-postprocess_only = False
+preview_only = True  # preview model/mesh only?
+postprocess_only = False # postprocess existing data without re-running simulation?
+no_gui = False # if set to True, there is no mesh/model preview in AppCSXCAD, and simulation starts immediately. 
 
 # ===================== input files and path settings =======================
 
@@ -70,13 +65,26 @@ Boundaries = ['PEC', 'PEC', 'PEC', 'PEC', 'PEC', 'PEC']
 cells_per_wavelength = 20   # how many mesh cells per wavelength, must be 10 or more
 energy_limit = -40          # end criteria for residual energy (dB)
 
-# ports from GDSII Data, polygon geometry from specified special layer
-# note that for multiport simulation, active port excitation are defined in the loop calling simulation_setup.setupSimulation
+# port configuration, port geometry is read from GDSII file on the specified layer
 simulation_ports = simulation_setup.all_simulation_ports()
-# in-plane port is specified with target_layername=
-# via port is specified with from_layername= and to_layername=
-simulation_ports.add_port(simulation_setup.simulation_port(portnumber=1, voltage=1, port_Z0=50, source_layernum=201, from_layername='Metal1', to_layername='TopMetal2', direction='z'))
-simulation_ports.add_port(simulation_setup.simulation_port(portnumber=2, voltage=1, port_Z0=50, source_layernum=202, from_layername='Metal1', to_layername='TopMetal2', direction='z'))
+
+# in-plane port is specified with target_layername= and direction x or y
+# via port is specified with from_layername= and to_layername= and direction z
+simulation_ports.add_port(simulation_setup.simulation_port(portnumber=1, 
+                                                           voltage=1, 
+                                                           port_Z0=50, 
+                                                           source_layernum=201, 
+                                                           from_layername='Metal1', 
+                                                           to_layername='TopMetal2', 
+                                                           direction='z'))
+
+simulation_ports.add_port(simulation_setup.simulation_port(portnumber=2, 
+                                                           voltage=1, 
+                                                           port_Z0=50, 
+                                                           source_layernum=202, 
+                                                           from_layername='Metal1', 
+                                                           to_layername='TopMetal2', 
+                                                           direction='z'))
 
 # ======================== simulation ================================
 
@@ -88,7 +96,12 @@ layernumbers = metals_list.getlayernumbers()
 layernumbers.extend(simulation_ports.portlayers)
 
 # read geometries from GDSII, only purpose 0
-allpolygons = gds_reader.read_gds(gds_filename, layernumbers, purposelist=[0], metals_list=metals_list, preprocess=preprocess_gds, merge_polygon_size=merge_polygon_size)
+allpolygons = gds_reader.read_gds(gds_filename, 
+                                  layernumbers, 
+                                  purposelist=[0], 
+                                  metals_list=metals_list, 
+                                  preprocess=preprocess_gds, 
+                                  merge_polygon_size=merge_polygon_size)
 
 # calculate maximum cellsize from wavelength in dielectric
 wavelength_air = 3e8/fstop / unit
@@ -123,7 +136,8 @@ for port in simulation_ports.ports:
                                         sim_path, 
                                         model_basename, 
                                         preview_only, 
-                                        postprocess_only)
+                                        postprocess_only,
+                                        no_gui=no_gui)
 
 
 # Initialize an empty matrix for S-parameters

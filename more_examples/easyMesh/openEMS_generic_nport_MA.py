@@ -1,7 +1,12 @@
 import os
 import sys
 
-from gds2openEMS import *
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), 'modules')))
+
+import modules.util_stackup_reader as stackup_reader
+import modules.util_gds_reader as gds_reader
+import modules.util_utilities as utilities
+import modules.util_simulation_setup as simulation_setup
 
 from openEMS import openEMS
 import numpy as np
@@ -16,20 +21,15 @@ import numpy as np
 # This model uses an alternative syntax where are settings are stored in settings dictionary,
 # which makes it easier to implement future extensions without touching again the 
 # simulation model code
-#
-# This model uses gds2openEMS module installed by 
-#    pip install gds2openEMS
-# so that you don't need to have a copy of the module code in your working directory.
-# To update to the latest version of gds2openEMS, use 
-#    pip install gds2openEMS --upgrade
 
-
+# Mesh method is set to easyMesh
+# https://github.com/MustafaAlchalabi/easyMesh4openEMS/tree/main
 
 
 # ======================== workflow settings ================================
 settings = {}
 
-settings['preview_only'] = False  # preview model/mesh only?
+settings['preview_only'] = True  # preview model/mesh only?
 settings['postprocess_only'] = False # postprocess existing data without re-running simulation?
 settings['no_gui'] = False # if set to True, there is no mesh/model preview in AppCSXCAD, and simulation starts immediately. 
 
@@ -72,6 +72,7 @@ settings['fstop']   = 110e9
 settings['numfreq']   = 401
 
 settings['refined_cellsize'] = 2  # mesh cell size in conductor region
+settings['easyMesh'] = True # enable to use easyMesh4openEMS meshing module, https://github.com/MustafaAlchalabi/easyMesh4openEMS/tree/main
 
 # choices for boundary: 
 # 'PEC' : perfect electric conductor (default)
@@ -162,21 +163,23 @@ for port in simulation_ports.ports:
     simulation_setup.runSimulation   (FDTD=FDTD, settings=settings  )# must use named parameters when using settings dict!
 
 
-# Initialize an empty matrix for S-parameters
-num_ports = simulation_ports.portcount
-s_params = np.empty((num_ports, num_ports, settings['numfreq']), dtype=object)
+if not settings['preview_only']:
 
-# Define frequency resolution. Due to FFT from Empire time domain results, 
-# this is postprocessing and we can change it again at any time.
-f = np.linspace(settings['fstart'],settings['fstop'],settings['numfreq'])
+    # Initialize an empty matrix for S-parameters
+    num_ports = simulation_ports.portcount
+    s_params = np.empty((num_ports, num_ports, settings['numfreq']), dtype=object)
 
-# Populate the S-parameter matrix with simulation results
-for i in range(1, num_ports + 1):
-    for j in range(1, num_ports + 1):
-        s_params[i-1, j-1] = utilities.calculate_Sij(i, j, f, sim_path, simulation_ports)
+    # Define frequency resolution. Due to FFT from Empire time domain results, 
+    # this is postprocessing and we can change it again at any time.
+    f = np.linspace(settings['fstart'],settings['fstop'],settings['numfreq'])
 
-# Write to Touchstone *.snp file
-snp_name = os.path.join(sim_path, model_basename + '.s' + str(num_ports) + 'p')
-utilities.write_snp(s_params, f, snp_name)
+    # Populate the S-parameter matrix with simulation results
+    for i in range(1, num_ports + 1):
+        for j in range(1, num_ports + 1):
+            s_params[i-1, j-1] = utilities.calculate_Sij(i, j, f, sim_path, simulation_ports)
 
-print('Created S-parameter output file at ', snp_name)
+    # Write to Touchstone *.snp file
+    snp_name = os.path.join(sim_path, model_basename + '.s' + str(num_ports) + 'p')
+    utilities.write_snp(s_params, f, snp_name)
+
+    print('Created S-parameter output file at ', snp_name)

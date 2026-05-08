@@ -3,37 +3,23 @@
 The files provided here enable openEMS EM simulation with layouts
 created for the IHP SG13G2 RFIC technology.
 
-The difference to the workflow available at 
-https://github.com/IHP-GmbH/IHP-Open-PDK/tree/main/ihp-sg13g2/libs.tech/openems
-is that we now have an additional layer of abstraction, to simplify the
-re-use of model code and enable this new functionality:
-- Automatic mesh generation
-- The model code can load files directly from GDSII
-- Ports (in-plane or via port) are defined in GDSII file on special layers
-- The technology stackup is read from an XML file
-- Merging of via arrays is supported
-- Touchstone SnP file output is supported
-
-Overall, models in this new workflow looks much cleaner because most "routine" stuff 
-is moved into external libraries.
-
 # Documentation
-An extensive documentation is available in PDF format here:
+An extensive User's Guide of this GDSII to openEMS workflow is available in PDF format here:  
 [Using OpenEMS Python with IHP SG13G2 v2](./doc/Using_OpenEMS_Python_with_IHP_SG13G2_v2.pdf) 
+
+An overview of the EM solver ecosystem (tools and utilities) for IHP SG13 can be found here:  
+https://github.com/IHP-GmbH/IHP-Open-PDK/tree/main/ihp-sg13g2/libs.doc/doc
 
 # System requirements
 This workflow is based on the Python workflow for OpenEMS, 
-please refer to https://www.openems.de/ 
+please refer to https://www.openems.de/  
 and https://docs.openems.de/python/install.html#python-linux-install 
 
-If you have trouble to build OpenEMS for Linux, please check out the OpenEMS forum
-https://github.com/thliebig/openEMS-Project/discussions 
-Running the Windows version is easier because pre-built binaries are available.
 
 In addition to OpenEMS, the Python module gdspy must be installed.
 
 # Automatic meshing
-Two meshing methods are available in this workflow. The default is equal mesh spacing across the entire area where GDSII elements are drawn. As an option, an automatic meshing algorithm will be used, which tries to detect edges and diagonal areas that need local refinement. Mesh lines that are too close (resulting in slow simulation) will be removed or merged automatically.
+Two meshing methods are available in this workflow. In the examples, **automatic meshing based on geometry** is enabled, which tries to detect edges and diagonal areas that need local refinement. Mesh lines that are too close (resulting in slow simulation) will be removed or merged automatically.
 
 ![plot](./doc/png/automatic_meshing.png)
 
