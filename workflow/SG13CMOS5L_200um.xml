@@ -28,19 +28,19 @@
         <Dielectric Name="Substrate" Material="Substrate" Thickness="186.950" />
       </Dielectrics>
       <Layers>
-        <Substrate Offset="186.950"/>
+        <Substrate Offset="190.70"/>
         <Layer Name="Activ" Type="conductor" Zmin="0.0000" Zmax="0.4000" Material="Activ" Layer="1" />
-		<Layer Name="Cont" Type="via" Zmin="0.4000" Zmax="1.0400" Material="Cont" Layer="6" />
+	<Layer Name="Cont" Type="via" Zmin="0.4000" Zmax="1.0400" Material="Cont" Layer="6" />
         <Layer Name="Metal1" Type="conductor" Zmin="1.0400" Zmax="1.4600" Material="Metal1" Layer="8" />
-		<Layer Name="Via1" Type="via" Zmin="1.4600" Zmax="2.0000" Material="Via1" Layer="19" />
+	<Layer Name="Via1" Type="via" Zmin="1.4600" Zmax="2.0000" Material="Via1" Layer="19" />
         <Layer Name="Metal2" Type="conductor" Zmin="2.0000" Zmax="2.4900" Material="Metal2" Layer="10" />
-		<Layer Name="Via2" Type="via" Zmin="2.4900" Zmax="3.0300" Material="Via2" Layer="29" />
+	<Layer Name="Via2" Type="via" Zmin="2.4900" Zmax="3.0300" Material="Via2" Layer="29" />
         <Layer Name="Metal3" Type="conductor" Zmin="3.0300" Zmax="3.5200" Material="Metal3" Layer="30" />
-		<Layer Name="Via3" Type="via" Zmin="3.5200" Zmax="4.0600" Material="Via3" Layer="49" />
+	<Layer Name="Via3" Type="via" Zmin="3.5200" Zmax="4.0600" Material="Via3" Layer="49" />
         <Layer Name="Metal4" Type="conductor" Zmin="4.0600" Zmax="4.5500" Material="Metal4" Layer="50" />
-		<Layer Name="TopVia1" Type="via" Zmin="4.5500" Zmax="5.4" Material="TopVia1" Layer="125" />
+	<Layer Name="TopVia1" Type="via" Zmin="4.5500" Zmax="5.4" Material="TopVia1" Layer="125" />
         <Layer Name="TopMetal1" Type="conductor" Zmin="5.4" Zmax="7.4" Material="TopMetal1" Layer="126" />
-        <Layer Name="LBE" Type="via" Zmin="-186.950" Zmax="0.0000" Material="AIR" Layer="157" />
+        <Layer Name="LBE" Type="via" Zmin="-190.70" Zmax="0.0000" Material="AIR" Layer="157" />
         <Layer Name="SUBGND" Type="via" Zmin="-3.75" Zmax="0" Material="LOWLOSS" Layer="210" />
       </Layers>
     </ELayers>
