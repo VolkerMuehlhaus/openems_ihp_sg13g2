@@ -663,8 +663,8 @@ def runSimulation (excite_portnumbers=None,
                    postprocess_only=None, 
                    force_simulation=False,
                    no_gui = False,
+                   numThreads=None,
                    settings=None):
-    
     # This function runs the actual simulation in openEMS
 
     # This function can be called in two ways: 
@@ -682,6 +682,7 @@ def runSimulation (excite_portnumbers=None,
             postprocess_only   = settings.get('postprocess_only','')
             force_simulation   = settings.get('force_simulation', False)
             no_gui             = settings.get('no_gui', False)
+            numThreads         = settings.get('numThreads', 0)
         else:
             print('If positional parameters are not defined in setupSimulation, you must provide valid "settings" dictionary instead')                
             exit(1)
@@ -696,6 +697,10 @@ def runSimulation (excite_portnumbers=None,
         preview_only = False
         postprocess_only = False
 
+    # numThreads is optional, setting this to 0 will use automatic thread detection in openEMS solver
+    if numThreads is None:
+        numThreads = 0
+       
 
     # Write JSON with port information to simulation data directory, used for external de-embedding
     # This might be called multiple times if there are multiple excitations, but never mind ...
@@ -744,7 +749,7 @@ def runSimulation (excite_portnumbers=None,
             print('Starting FDTD simulation for excitation ', str(excite_portnumbers))
             try:
 
-                FDTD.Run(excitation_path)  # DO NOT SPECIFY COMMAND LINE OPTIONS HERE! That will fail for repeated runs with multiple excitations.
+                FDTD.Run(excitation_path, numThreads=numThreads)  # BE CAREFUL WITH COMMAND LINE OPTIONS HERE! Some openEMS releases will fail for repeated runs with multiple excitations.
                 print('FDTD simulation completed successfully for excitation ', str(excite_portnumbers))
                 # Now that simulation created output data, write the hash of the underlying XML model. This will help to identify existing data for this model.
                 write_hash_to_data_folder(excitation_path, XML_hash)
@@ -789,6 +794,8 @@ def runOpenEMS (excite_ports, settings):
         sim_path = settings['sim_path'] 
         model_basename = settings['model_basename'] 
 
+        numThreads = settings.get('numThreads', 0)
+
         # calculate wavelength and max_cellsize in project units
         wavelength_air = 3e8/fstop / unit
         max_cellsize = (wavelength_air)/(np.sqrt(materials_list.eps_max)*cells_per_wavelength) 
@@ -817,7 +824,8 @@ def runOpenEMS (excite_ports, settings):
                                 sim_path, 
                                 model_basename, 
                                 preview_only, 
-                                False)        
+                                False,
+                                numThreads = numThreads)        
     
 
         # Initialize an empty matrix for S-parameters
