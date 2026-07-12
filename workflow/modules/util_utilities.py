@@ -170,15 +170,72 @@ def calculate_Zij_2port (i, j, f, sim_path, simulation_ports, symmetry=False):
             # Z22
             return Z0*((1-s11)*(1+s22)+s12*s21)/((1-s11)*(1-s22)-s12*s21)
         else:
-            print('[ERROR] Invalid parameter requested: Y',i,j)
+            print('[ERROR] Invalid parameter requested: Z',i,j)
             sys.exit(1)            
 
 
     except:
-        print('[ERROR] Error in Y-parameter calculation')
+        print('[ERROR] Error in Z-parameter calculation')
         sys.exit(1)
         
+def calculate_Zij(i, j, f, sim_path, simulation_ports):
+    import numpy as np
+    import sys
+    try:
+        # -------------------------------------------------------------
+        # Determine number of ports
+        # -------------------------------------------------------------
+        n_ports = 0
+        while True:
+            try:
+                simulation_ports.get_port_by_number(n_ports + 1)
+                n_ports += 1
+            except:
+                break
 
+        if n_ports == 0:
+            raise RuntimeError("No ports found.")
+
+        Z0 = simulation_ports.get_port_by_number(1).port_Z0
+
+        for p in range(2, n_ports + 1):
+            if simulation_ports.get_port_by_number(p).port_Z0 != Z0:
+                raise RuntimeError("All ports must use the same reference impedance.")
+
+        nf = len(f)
+
+        # -------------------------------------------------------------
+        # Build S matrix
+        # Shape = (ports, ports, frequencies)
+        # -------------------------------------------------------------
+        S = np.zeros((n_ports, n_ports, nf), dtype=complex)
+
+        for r in range(n_ports):
+            for c in range(n_ports):
+                S[r, c, :] = calculate_Sij(
+                    r + 1,
+                    c + 1,
+                    f,
+                    sim_path,
+                    simulation_ports
+                )
+
+        # -------------------------------------------------------------
+        # Compute requested Zij(f)
+        # -------------------------------------------------------------
+        Zij = np.zeros(nf, dtype=complex)
+        I = np.eye(n_ports, dtype=complex)
+
+        for k in range(nf):
+            Sk = S[:, :, k]
+            Zk = Z0 * (I + Sk) @ np.linalg.inv(I - Sk)
+            Zij[k] = Zk[i-1, j-1]
+
+        return Zij
+
+    except Exception as e:
+        print("[ERROR] Error in Z-parameter calculation:", e)
+        sys.exit(1)
 
 
 # =========================== S-parameter output  =================================
