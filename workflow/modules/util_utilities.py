@@ -177,6 +177,7 @@ def calculate_Zij_2port (i, j, f, sim_path, simulation_ports, symmetry=False):
     except:
         print('[ERROR] Error in Z-parameter calculation')
         sys.exit(1)
+
         
 def calculate_Zij(i, j, f, sim_path, simulation_ports):
     import numpy as np
@@ -185,14 +186,7 @@ def calculate_Zij(i, j, f, sim_path, simulation_ports):
         # -------------------------------------------------------------
         # Determine number of ports
         # -------------------------------------------------------------
-        n_ports = 0
-        while True:
-            try:
-                simulation_ports.get_port_by_number(n_ports + 1)
-                n_ports += 1
-            except:
-                break
-
+        n_ports = simulation_ports.portcount
         if n_ports == 0:
             raise RuntimeError("No ports found.")
 
