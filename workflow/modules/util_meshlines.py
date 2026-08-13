@@ -21,6 +21,33 @@
 import math
 import numpy as np
 
+
+def get_margins (margin):
+    """get margins at xmin,xmax,ymin,ymax from user specified data (single value or list)
+
+    Args:
+        margin (float or list): single value for equal margings or list for xmin,xmax,ymin,ymax
+        Return value: margin at xmin,xmax,ymin,ymax
+    """
+    # air_around can be specified as single value or array, check what we have here
+    if isinstance(margin, list):
+        if len(margin)==4:
+            margin_xmin = margin[0]
+            margin_xmax = margin[1]
+            margin_ymin = margin[2]
+            margin_ymax = margin[3]
+        else:
+            print('Error: expected margin to be a single value or a list of 4 values:')
+            print('[margin_xmin, margin_xmax, margin_ymin, margin_ymax]')
+            print('but instead we have this: ', str(margin))    
+            exit(1)
+    else:
+        # all the same
+        margin_xmin = margin_xmax = margin_ymin = margin_ymax = margin
+
+    return margin_xmin, margin_xmax, margin_ymin, margin_ymax
+
+
 def create_z_mesh(mesh, dielectrics_list, metals_list, target_cellsize, max_cellsize, antenna_margin, exclude_list):
 
     class mesh_stackup_layer:
@@ -160,19 +187,20 @@ def create_z_mesh(mesh, dielectrics_list, metals_list, target_cellsize, max_cell
 
 
 def create_standard_xy_mesh(mesh, allpolygons, margin, antenna_margin, target_cellsize, max_cellsize):
+
+    margin_xmin, margin_xmax, margin_ymin, margin_ymax  = get_margins (margin)
     
-    oversize = margin + antenna_margin
-    
+   
     # geometry region
     add_equal_meshlines(mesh, 'x', allpolygons.get_xmin(), allpolygons.get_xmax(), target_cellsize)
     add_equal_meshlines(mesh, 'y', allpolygons.get_ymin(), allpolygons.get_ymax(), target_cellsize)
 
     # margins
-    add_graded_meshlines (mesh, 'x', allpolygons.get_xmin(), allpolygons.get_xmin() - oversize, -1.5*target_cellsize, 1.3, -max_cellsize)
-    add_graded_meshlines (mesh, 'x', allpolygons.get_xmax(), allpolygons.get_xmax() + oversize,  1.5*target_cellsize, 1.3,  max_cellsize)    
+    add_graded_meshlines (mesh, 'x', allpolygons.get_xmin(), allpolygons.get_xmin() - (margin_xmin+antenna_margin), -1.5*target_cellsize, 1.3, -max_cellsize)
+    add_graded_meshlines (mesh, 'x', allpolygons.get_xmax(), allpolygons.get_xmax() + (margin_xmax+antenna_margin),  1.5*target_cellsize, 1.3,  max_cellsize)    
     
-    add_graded_meshlines (mesh, 'y', allpolygons.get_ymin(), allpolygons.get_ymin() - oversize, -1.5*target_cellsize, 1.3, -max_cellsize)
-    add_graded_meshlines (mesh, 'y', allpolygons.get_ymax(), allpolygons.get_ymax() + oversize,  1.5*target_cellsize, 1.3,  max_cellsize)    
+    add_graded_meshlines (mesh, 'y', allpolygons.get_ymin(), allpolygons.get_ymin() - (margin_ymin+antenna_margin), -1.5*target_cellsize, 1.3, -max_cellsize)
+    add_graded_meshlines (mesh, 'y', allpolygons.get_ymax(), allpolygons.get_ymax() + (margin_ymax+antenna_margin),  1.5*target_cellsize, 1.3,  max_cellsize)    
     
     return mesh
 
@@ -244,18 +272,19 @@ def create_xy_mesh_from_polygons (mesh, allpolygons, margin, antenna_margin, tar
     weighted_meshlines_y = all_weighted_meshlines()
 
     # outer simulation boundary
-    oversize = margin 
-    weighted_meshlines_x.addPolyEdge(allpolygons.get_xmin() - oversize)
-    weighted_meshlines_x.addPolyEdge(allpolygons.get_xmax() + oversize)
-    weighted_meshlines_y.addPolyEdge(allpolygons.get_ymin() - oversize)
-    weighted_meshlines_y.addPolyEdge(allpolygons.get_ymax() + oversize)
+    
+    margin_xmin, margin_xmax, margin_ymin, margin_ymax  = get_margins (margin)
+
+    weighted_meshlines_x.addPolyEdge(allpolygons.get_xmin() - margin_xmin)
+    weighted_meshlines_x.addPolyEdge(allpolygons.get_xmax() + margin_xmax)
+    weighted_meshlines_y.addPolyEdge(allpolygons.get_ymin() - margin_ymin)
+    weighted_meshlines_y.addPolyEdge(allpolygons.get_ymax() + margin_ymax)
 
     if antenna_margin>0:
-        oversize = margin + antenna_margin
-        weighted_meshlines_x.addPolyEdge(allpolygons.get_xmin() - oversize)
-        weighted_meshlines_x.addPolyEdge(allpolygons.get_xmax() + oversize)
-        weighted_meshlines_y.addPolyEdge(allpolygons.get_ymin() - oversize)
-        weighted_meshlines_y.addPolyEdge(allpolygons.get_ymax() + oversize)
+        weighted_meshlines_x.addPolyEdge(allpolygons.get_xmin() - margin_xmin - antenna_margin)
+        weighted_meshlines_x.addPolyEdge(allpolygons.get_xmax() + margin_xmax + antenna_margin)
+        weighted_meshlines_y.addPolyEdge(allpolygons.get_ymin() - margin_ymin - antenna_margin)
+        weighted_meshlines_y.addPolyEdge(allpolygons.get_ymax() + margin_ymax + antenna_margin)
     
 
     # step 1: create lines at all polygon edges
