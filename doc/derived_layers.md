@@ -6,6 +6,10 @@ directly from GDSII. Derived layers are defined in the stackup XML file and are
 resolved automatically by `gds_reader.read_gds()` (see `util_stackup_reader.py` and
 `util_gds_reader.py`).
 
+Reference file in this repo: [`SG13G2_with_resistors_200um.xml`](../more_examples/resistors_sg13g2/SG13G2_with_resistors_200um.xml) —
+uses `OR`/`AND`/`NOT` (including chaining, see below) to recognize resistor geometry from
+poly/implant/contact layers.
+
 ## Enabling derived layers
 
 Two things are needed in the stackup XML, inside `<ELayers>`:
