@@ -44,6 +44,11 @@ file may use attributes this version of the reader doesn't know about yet.
 One `<Material>` element per material, referenced by name from `<Dielectric>` and `<Layer>`
 elements later in the file.
 
+> **Note:** `Density`, `ThermalConductivity`, and `ThermalConductivityTable` are **not used by
+> S-parameter simulation**. They are only read when this XML file is used in a thermal
+> simulation flow — leaving them at their defaults (or omitting them) has no effect on EM
+> simulation results.
+
 | Attribute                 | Required | Default | Description |
 |----------------------------|----------|---------|--------------|
 | `Name`                     | yes      | —       | Material name, referenced elsewhere as `Material="..."`. |
