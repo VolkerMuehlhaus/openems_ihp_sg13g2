@@ -20,6 +20,8 @@
 import os
 import sys
 import json
+import time
+import socket
 
 from . import util_utilities as utilities
 from . import util_meshlines
@@ -313,8 +315,38 @@ def addGeometry_to_CSX (CSX, excite_portnumbers,simulation_ports,FDTD, materials
     return CSX, CSX_materials_list                    
 
 
+def get_margins (margin):
+    """get margins at xmin,xmax,ymin,ymax from user specified data (single value or list)
+
+    Args:
+        margin (float or list): single value for equal margings or list for xmin,xmax,ymin,ymax
+        Return value: margin at xmin,xmax,ymin,ymax
+    """
+    # air_around can be specified as single value or array, check what we have here
+    if isinstance(margin, list):
+        if len(margin)==4:
+            margin_xmin = margin[0]
+            margin_xmax = margin[1]
+            margin_ymin = margin[2]
+            margin_ymax = margin[3]
+        else:
+            print('Error: expected margin to be a single value or a list of 4 values:')
+            print('[margin_xmin, margin_xmax, margin_ymin, margin_ymax]')
+            print('but instead we have this: ', str(margin))    
+            exit(1)
+    else:
+        # all the same
+        margin_xmin = margin_xmax = margin_ymin = margin_ymax = margin
+
+    return margin_xmin, margin_xmax, margin_ymin, margin_ymax
+
+    
+
 def addDielectrics_to_CSX (CSX, CSX_materials_list,  materials_list, dielectrics_list, allpolygons, margin, addPEC):
 # Add dielectric layers (these extend through simulation area and have no polygons in GDSII)
+
+    # margin defined by user can be single value or list, get that now
+    margin_xmin, margin_xmax, margin_ymin, margin_ymax= get_margins (margin)
 
     for dielectric in dielectrics_list.dielectrics:
         # get CSX material object for this dielectric layers material name
@@ -337,14 +369,14 @@ def addDielectrics_to_CSX (CSX, CSX_materials_list,  materials_list, dielectrics
 
         # now that we have a CSX material, add the dielectric body (substrate, oxide etc)
             bbox_xmin, bbox_xmax, bbox_ymin, bbox_ymax = allpolygons.bounding_box.get_layer_bounding_box(dielectric.gdsboundary)
-            CSX_material.AddBox(priority=10, start=[bbox_xmin - margin, bbox_ymin - margin, dielectric.zmin], stop=[bbox_xmax + margin, bbox_ymax + margin, dielectric.zmax])
+            CSX_material.AddBox(priority=10, start=[bbox_xmin - margin_xmin, bbox_ymin - margin_ymin, dielectric.zmin], stop=[bbox_xmax + margin_xmax, bbox_ymax + margin_ymax, dielectric.zmax])
 
     # Optional: add a layer of PEC with zero thickness below stackup
     # This is useful if we have air layer around for absorbing boundaries (antenna simulation)
     if addPEC:
         PEC = CSX.AddMetal( 'PEC_bottom' )
         PEC.SetColor("#ffffff", 50) 
-        PEC.AddBox(priority=255, start=[bbox_xmin - margin, bbox_ymin - margin, 0], stop=[bbox_xmax + margin, bbox_ymax + margin, 0])
+        PEC.AddBox(priority=255, start=[bbox_xmin - margin_xmin, bbox_ymin - margin_ymin, 0], stop=[bbox_xmax + margin_xmax, bbox_ymax + margin_ymax, 0])
 
     return CSX, CSX_materials_list  
 
@@ -748,14 +780,32 @@ def runSimulation (excite_portnumbers=None,
             # Hash is different or not found, or simulation is forced
             print('Starting FDTD simulation for excitation ', str(excite_portnumbers))
             try:
-
+                start = time.perf_counter()
                 FDTD.Run(excitation_path, numThreads=numThreads)  # BE CAREFUL WITH COMMAND LINE OPTIONS HERE! Some openEMS releases will fail for repeated runs with multiple excitations.
+                end = time.perf_counter()
+                run_time_seconds = int(end-start)
+
                 print('FDTD simulation completed successfully for excitation ', str(excite_portnumbers))
                 # Now that simulation created output data, write the hash of the underlying XML model. This will help to identify existing data for this model.
                 write_hash_to_data_folder(excitation_path, XML_hash)
             except AssertionError as e:
                 print('[ERROR] AssertionError during FDTD simulation: ', e)
                 sys.exit(1)
+
+            # write some timing and thread count information to log file
+            logfile_name = os.path.join(excitation_path, 'time_information.txt')
+            logfile = open(logfile_name, "w") 
+            if numThreads==0:
+                logfile.write('Simulation using automatic thread count set by solver\n')
+            else:
+                logfile.write(f'Simulation enforcing numThreads={numThreads} in model file\n')
+            computer_name = socket.gethostname()
+            logfile.write(f'Host name: {computer_name} \n')
+            logfile.write(f'openEMS solve time for this excitation: {run_time_seconds} seconds\n')
+            logfile.close() 
+
+
+
         else:
             print('Data for this model already exists, skipping simulation!')
             print('To force re-simulation, add parameter "force_simulation=True" to the runSimulation() call.')
