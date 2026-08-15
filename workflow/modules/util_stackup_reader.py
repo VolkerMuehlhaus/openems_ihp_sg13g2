@@ -25,20 +25,69 @@
 # 20 Nov 2025: added functionality to get relative positions between metals
 # 10 Aug 2026: added derived layer option
 # 10 Aug 2026: added Oversize option for derived layers (grow/shrink outline)
+# 15 Aug 2026: added Reference/ReferenceEdge option for reference-relative Layer positioning
+# 15 Aug 2026: added Reference/ReferenceEdge option for reference-relative Dielectric positioning
+# 15 Aug 2026: fixed register_metals_inside() to register a metal by its zmin alone, so a
+#              metal whose zmax overflows past its own dielectric (e.g. via Reference) is
+#              still registered somewhere instead of silently dropped from metals_inside
+# 15 Aug 2026: added a schemaVersion check - prints a warning (does not abort) when a
+#              stackup file declares a schemaVersion newer than SUPPORTED_SCHEMA_VERSION
 
-__version__ = "1.3.0"
+__version__ = "1.6.0"
 
 import os
 import math
-import xml.etree.ElementTree 
+import xml.etree.ElementTree
+
+# Highest <Stackup schemaVersion="..."> this reader understands. schemaVersion is otherwise
+# informational only (nothing here branches on it) - this is used solely to warn when a file
+# was written by a newer gds2palace than the one doing the reading, since such a file may use
+# attributes this version of the reader doesn't know about yet. Bump this whenever a schema
+# change actually needs a newer reader to be interpreted correctly (e.g. Reference/
+# ReferenceEdge bumped the format to "3.0").
+SUPPORTED_SCHEMA_VERSION = "3.0"
 
 
 def safe_get (data, key, default):
   val = data.get(key)
   if val is not None:
     return val
-  else:  
+  else:
     return default
+
+
+def _parse_schema_version (version_string):
+  """Parse a schemaVersion string like "3.0" into a tuple of ints for numeric comparison
+     (plain string comparison would wrongly rank "10.0" below "9.0").
+  Args:
+      version_string (string): e.g. "3.0", or None/malformed
+  Returns:
+      tuple of int, or None if version_string isn't a dotted-number version
+  """
+  if not version_string:
+    return None
+  try:
+    return tuple(int(part) for part in version_string.split("."))
+  except ValueError:
+    return None
+
+
+def check_schema_version (substrate_root):
+  """Warn (print only, does not raise/exit) if substrate_root's schemaVersion is newer than
+     SUPPORTED_SCHEMA_VERSION - such a file may have been written with a newer gds2palace
+     and could use attributes this reader doesn't understand yet. Silently does nothing if
+     schemaVersion is missing or doesn't parse as a dotted-number version.
+  Args:
+      substrate_root (xml.etree.ElementTree.Element): root <Stackup> element
+  """
+  file_version = substrate_root.get("schemaVersion")
+  file_tuple = _parse_schema_version(file_version)
+  supported_tuple = _parse_schema_version(SUPPORTED_SCHEMA_VERSION)
+  if file_tuple is not None and supported_tuple is not None and file_tuple > supported_tuple:
+    print(f'WARNING: This stackup file has schemaVersion="{file_version}", newer than '
+          f'schemaVersion="{SUPPORTED_SCHEMA_VERSION}" supported by this version of '
+          f'gds2palace (util_stackup_reader.py {__version__}). It may use attributes this '
+          f'reader does not understand yet - consider upgrading gds2palace.')
 
 def _make_comment_preserving_parser():
   """XML parser that keeps <!-- comments --> as Comment nodes in the tree, instead of
@@ -142,33 +191,108 @@ class dielectric_layer:
     """create stackup layer object (usually dielectric or semiconductor) from XML data line
 
     Args:
-        data (string): line from XML data, required parameters: "Name","Material","Thickness", optional parameter "Boundary" for bounding layer number
+        data (string): line from XML data, required parameters: "Name","Material", and one of
+          "Thickness"/"Zmax" (see below); optional parameter "Boundary" for bounding layer number.
+          Optional "Reference"/"ReferenceEdge": if "Reference" names another Dielectric, "Zmin"
+          (default 0) and "Zmax" (default Zmin+Thickness) are offsets from that Dielectric's edge
+          instead of absolute z, resolved later by resolve().
     """
     self.name = data.get("Name")
     self.material = data.get("Material")
 
-    # dielectrics can be specified by thickness when stacked on top of each other, or by absolute zmin/zmax otherwise
-    self.zmin = safe_get(data, "Zmin", None)
-    self.zmax = safe_get(data, "Zmax", None)
-    if not (self.zmin is None or self.zmax is None):
-      # we have a valid position, use that instead of stacking everything one after another
-      self.zmin = float(self.zmin)
-      self.zmax = float(self.zmax)
+    self.reference = data.get("Reference") or None
+    self.reference_edge = data.get("ReferenceEdge", "Top")
+    # set True by dielectric_layers_list._assign_implicit_references() for a dielectric that had
+    # no explicit Reference in the XML but got one auto-derived from implicit Thickness-stacking
+    self.reference_is_auto = False
+
+    zmin_attr = safe_get(data, "Zmin", None)
+    zmax_attr = safe_get(data, "Zmax", None)
+    thickness_attr = data.get("Thickness")
+
+    if self.reference:
+      # Reference set: Zmin/Zmax (if given) are offsets from the reference edge. Unlike <Layer>,
+      # both aren't required - Dielectrics keep Thickness as their primary size: Zmin defaults to
+      # 0 (start right at the reference edge, the common case) and Zmax defaults to Zmin+Thickness.
+      self.offset_zmin = float(zmin_attr) if zmin_attr is not None else 0.0
+      if zmax_attr is not None:
+        self.offset_zmax = float(zmax_attr)
+      elif thickness_attr is not None:
+        self.offset_zmax = self.offset_zmin + float(thickness_attr)
+      else:
+        print('ERROR: Dielectric ', self.name, ' has Reference set but neither Zmax nor Thickness to size it')
+        exit(1)
+      self.zmin = None
+      self.zmax = None
+      self.thickness = None  # set once resolved
+      self.absolute_zpos = False
+      self.resolved = False
+    elif not (zmin_attr is None or zmax_attr is None):
+      # we have a valid absolute position, use that instead of stacking everything one after another
+      self.zmin = float(zmin_attr)
+      self.zmax = float(zmax_attr)
       self.thickness = self.zmax - self.zmin
       self.absolute_zpos = True
+      self.resolved = True
     else:
-      # No absolute zmin and zmax, position results from stacking dielectric by order in file, using their thickness values
-      # z Position will be set later, by stacking dielectrics on top of each other
+      # No Reference and no absolute zmin/zmax: position results from stacking dielectric by
+      # order in file, using their thickness values - either directly (z Position set later by
+      # calculate_zpositions()), or via a Reference auto-assigned to the dielectric below it
+      # (see _assign_implicit_references()), resolved the same way as an explicit Reference.
       self.zmin = None
       self.zmax = None
       self.thickness  = float(data.get("Thickness"))
       self.absolute_zpos = False
+      self.resolved = False
+      # offsets for resolve(): used as-is if _assign_implicit_references() later gives this
+      # dielectric a Reference; if it stays the anchor (Reference stays None), resolve()
+      # applies these against a base of 0, i.e. zmin=0, zmax=Thickness - same as legacy
+      self.offset_zmin = 0.0
+      self.offset_zmax = self.thickness
 
     self.is_top = False
     self.is_bottom = False
     self.gdsboundary = data.get("Boundary")  # optional entry in stackup file
 
-    self.metals_inside = [] # metals that are located inside this dielectric, set by function 
+    self.metals_inside = [] # metals that are located inside this dielectric, set by function
+
+  def resolve (self, dielectrics_list):
+    """Resolve a Reference-based (explicit or auto-assigned) dielectric's zmin/zmax from an
+       offset into an absolute z position. No-op if already resolved (absolute-position
+       dielectrics are resolved in __init__). A dielectric with no Reference at all (the anchor
+       of an implicit stacking run) resolves against z=0, matching the legacy behavior of
+       dielectric_layers_list.calculate_zpositions() before Reference existed.
+    Args:
+        dielectrics_list (dielectric_layers_list): dielectrics to search for a Reference match
+    """
+    if self.resolved:
+      return
+
+    if self.reference is None:
+      base = 0.0
+    else:
+      target = dielectrics_list.get_by_name(self.reference)
+      if target is None:
+        print('ERROR: Dielectric ', self.name, ' has Reference="', self.reference, '" which matches no Dielectric')
+        exit(1)
+
+      edge = (self.reference_edge or "Top").upper()
+      if edge not in ("TOP", "BOTTOM"):
+        print('ERROR: Dielectric ', self.name, ' has invalid ReferenceEdge="', self.reference_edge, '", must be Top or Bottom')
+        exit(1)
+
+      if not target.resolved:
+        # defensive: caller (dielectric_layers_list.resolve_references) is expected to only
+        # call resolve() once a Reference target is already resolved
+        print('ERROR: Dielectric ', self.name, ' references Dielectric "', self.reference, '" which is not yet resolved')
+        exit(1)
+      base = target.zmax if edge == "TOP" else target.zmin
+
+    self.zmin = base + self.offset_zmin
+    self.zmax = base + self.offset_zmax
+    self.thickness = self.zmax - self.zmin
+    self.resolved = True
+
 
   def get_planar_metals_inside (self):
     """evaluates metals_inside list and returns only items that are conductor or sheet (no via, not dielectric via)
@@ -220,18 +344,72 @@ class dielectric_layers_list:
     self.dielectrics.append (dielectric)
 
 
-  def calculate_zpositions (self):
-    """dielectrics in XML are in reverse order, so we need to build position upside down
-    """
+  def _assign_implicit_references (self):
+    """For a dielectric with no explicit Reference and no absolute position (pure Thickness-only
+       stacking), auto-assign Reference = the nearest dielectric below it in file order that is
+       ALSO pure-Thickness-only, ReferenceEdge="Top" - reproducing exactly what the legacy
+       accumulate-by-file-order algorithm computed, just expressed as an explicit Reference chain.
 
-    z = 0
+       Deliberately preserves that legacy algorithm's quirk: an absolute-position or
+       explicit-Reference dielectric in between is transparent to this chain (skipped over, not
+       used as a stacking basis) - a pure-implicit dielectric right after one of those still
+       chains to the nearest pure-implicit dielectric further below, not to the one immediately
+       adjacent in the file. The very first pure-implicit dielectric encountered (nothing
+       pure-implicit below it) stays anchored with no Reference at all (resolve() treats that
+       as z=0), same as the legacy algorithm's starting point.
+    """
+    last_pure_implicit = None
     for dielectric in reversed(self.dielectrics):
-      if (dielectric.zmin is None) and (dielectric.zmax is None):
-        # only handle layers that don't have zmin, zmax specified in the XML file
-        t = float(dielectric.thickness)
-        dielectric.zmin = z
-        dielectric.zmax = z + t
-        z = dielectric.zmax
+      is_absolute = dielectric.absolute_zpos
+      has_explicit_reference = dielectric.reference is not None
+      if not is_absolute and not has_explicit_reference:
+        if last_pure_implicit is not None:
+          dielectric.reference = last_pure_implicit.name
+          dielectric.reference_edge = "Top"
+          dielectric.reference_is_auto = True
+        last_pure_implicit = dielectric
+      # absolute or explicit-Reference dielectrics don't affect last_pure_implicit - they're
+      # transparent to this tracking, exactly like the legacy accumulator skipped them
+
+
+  def resolve_references (self):
+    """Resolve every dielectric's zmin/zmax: absolute-position ones are already resolved at
+       construction; the rest (Reference-based, explicit or auto-assigned) are resolved in
+       dependency order, modeled on metal_layers_list.resolve_references() for Layers.
+    """
+    remaining = [dielectric for dielectric in self.dielectrics if not dielectric.resolved]
+
+    while remaining:
+      progress = False
+      still_remaining = []
+
+      for dielectric in remaining:
+        target = self.get_by_name(dielectric.reference) if dielectric.reference is not None else None
+        # ready to resolve once there's no Reference at all (the z=0 anchor case), or the
+        # Reference names a dielectric that is itself already resolved; an unresolvable name is
+        # also "ready" here so resolve() reports the precise error immediately instead of stalling
+        if dielectric.reference is None or target is None or target.resolved:
+          dielectric.resolve(self)
+          progress = True
+        else:
+          still_remaining.append(dielectric)
+
+      if not progress:
+        unresolved_names = [dielectric.name for dielectric in still_remaining]
+        print('ERROR: Circular or unresolvable Reference in Dielectrics: ', unresolved_names)
+        exit(1)
+
+      remaining = still_remaining
+
+
+  def calculate_zpositions (self):
+    """dielectrics in XML are in reverse order, so we need to build position upside down.
+       Resolves every dielectric's zmin/zmax via _assign_implicit_references() +
+       resolve_references() - kept as one method (same name/signature as before Reference
+       existed) since it's called from several places that don't need to know both steps happen.
+    """
+    self._assign_implicit_references()
+    self.resolve_references()
 
 
   def get_by_name (self, name_to_find):  
@@ -265,20 +443,24 @@ class dielectric_layers_list:
   
 
   def register_metals_inside (self, metals_list):
-    """iterates over dielectrics and metals, sets metals_inside property for each dielectric with list of metals within that z range
+    """iterates over dielectrics and metals, sets metals_inside property for each dielectric
+       with the list of metals that originate inside it - i.e. whichever single dielectric's
+       [zmin, zmax) range contains the metal's own zmin, regardless of where its zmax ends
+       up. A metal is deliberately not required to fit fully inside one dielectric: Reference
+       positioning (or just an unusual absolute Zmin/Zmax) can legitimately push a metal's
+       zmax past the dielectric it starts in and into the next one(s) above - it still needs
+       to be registered exactly once (with the dielectric it starts in), not silently dropped
+       everywhere. Membership by zmin alone also naturally covers a metal that exactly fills
+       its dielectric's whole height (no separate exact-match case needed).
     Args:
         metals_list (metal_layers_list): metals read from stackup
     """
     for dielectric in self.dielectrics:
       enclosed = []
       for metal in metals_list.metals:
-        # check if metal is enclosed in dielectric, excluding zmax exactly
-        if (metal.zmin >= dielectric.zmin) and (metal.zmax < dielectric.zmax):
-          enclosed.append(metal)          
-        # also include metals that fit exactly the height of the dielectric
-        if (metal.zmin == dielectric.zmin) and (metal.zmax == dielectric.zmax):
-          enclosed.append(metal)          
-      dielectric.metals_inside = enclosed    
+        if (metal.zmin >= dielectric.zmin) and (metal.zmin < dielectric.zmax):
+          enclosed.append(metal)
+      dielectric.metals_inside = enclosed
 
 
 # -------------------- conductor layers (metal and via) ---------------------------
@@ -292,19 +474,47 @@ class metal_layer:
     """create metal layer object (planar metal, via, sheet or dielectric) from XML data line
 
     Args:
-        data (string): line from XML data, required parameters: "Name","Layer","Type","Material","Zmin","Zmax"
+        data (string): line from XML data, required parameters: "Name","Layer","Type","Material","Zmin","Zmax".
+          Optional "Reference"/"ReferenceEdge": if "Reference" names another Dielectric or Layer, "Zmin"/"Zmax"
+          are interpreted as offsets from that layer's edge instead of absolute z, resolved later by resolve().
        """
     self.name = data.get("Name")
     self.layernum = data.get("Layer")
     self.type = data.get("Type").upper()
     self.material = data.get("Material")
-    self.zmin = float(data.get("Zmin"))
-    self.zmax = float(data.get("Zmax"))
-    
-    # force to sheet if zero thickness
+
+    self.reference = data.get("Reference") or None
+    self.reference_edge = data.get("ReferenceEdge", "Top")
+
+    # force to sheet if zero thickness (raw string compare, same convention whether Zmin/Zmax are absolute or offsets)
     if data.get("Zmin") == data.get("Zmax"):
       self.type = "SHEET"
 
+    self.is_used = False
+
+    # Metals directly above and below, this is set by metal_layers_list.sort_and_evaluate()
+    self.above = []
+    self.below = []
+
+    if self.reference:
+      # Zmin/Zmax are offsets from the resolved Reference edge; actual zmin/zmax are set by resolve()
+      self.offset_zmin = float(data.get("Zmin"))
+      self.offset_zmax = float(data.get("Zmax"))
+      self.zmin = None
+      self.zmax = None
+      self.resolved = False
+    else:
+      self.zmin = float(data.get("Zmin"))
+      self.zmax = float(data.get("Zmax"))
+      self.resolved = True
+      self._finalize_type_flags()
+
+
+  def _finalize_type_flags (self):
+    """Set thickness and is_via/is_metal/is_dielectric/is_sheet from self.type, and check sheet consistency.
+       Requires self.zmin/self.zmax to already be concrete floats. Called from __init__ directly for
+       absolute-position layers, or from resolve() once a Reference-based layer's offsets are resolved.
+    """
     if self.type == "SHEET" and not self.zmin==self.zmax:
       print('ERROR: Layer ', self.name, ' is defined as sheet layer, but zmax is different from zmin. This is not valid!')
       exit(1)
@@ -314,11 +524,47 @@ class metal_layer:
     self.is_metal = (self.type=="CONDUCTOR")
     self.is_dielectric = (self.type=="DIELECTRIC")
     self.is_sheet = (self.type=="SHEET")
-    self.is_used = False
 
-    # Metals directly above and below, this is set by metal_layers_list.sort_and_evaluate()
-    self.above = []
-    self.below = []
+
+  def resolve (self, dielectrics_list, metals_list):
+    """Resolve a Reference-based layer's zmin/zmax from an offset into an absolute z position.
+       No-op if already resolved (including non-Reference layers, which are resolved in __init__).
+    Args:
+        dielectrics_list (dielectric_layers_list): dielectrics to search for a Reference match
+        metals_list (metal_layers_list): metals to search for a Reference match
+    """
+    if self.resolved:
+      return
+
+    target_dielectric = dielectrics_list.get_by_name(self.reference)
+    target_metal = metals_list.getbylayername(self.reference)
+
+    if target_dielectric is not None and target_metal is not None:
+      print('ERROR: Layer ', self.name, ' has Reference="', self.reference, '" which is ambiguous - matches both a Dielectric and a Layer')
+      exit(1)
+    if target_dielectric is None and target_metal is None:
+      print('ERROR: Layer ', self.name, ' has Reference="', self.reference, '" which matches no Dielectric or Layer')
+      exit(1)
+
+    edge = (self.reference_edge or "Top").upper()
+    if edge not in ("TOP", "BOTTOM"):
+      print('ERROR: Layer ', self.name, ' has invalid ReferenceEdge="', self.reference_edge, '", must be Top or Bottom')
+      exit(1)
+
+    if target_dielectric is not None:
+      base = target_dielectric.zmax if edge == "TOP" else target_dielectric.zmin
+    else:
+      if not target_metal.resolved:
+        # defensive: caller (metal_layers_list.resolve_references) is expected to only call
+        # resolve() once a Layer reference target is already resolved
+        print('ERROR: Layer ', self.name, ' references Layer "', self.reference, '" which is not yet resolved')
+        exit(1)
+      base = target_metal.zmax if edge == "TOP" else target_metal.zmin
+
+    self.zmin = base + self.offset_zmin
+    self.zmax = base + self.offset_zmax
+    self._finalize_type_flags()
+    self.resolved = True
 
 
   def __str__ (self):
@@ -443,7 +689,49 @@ class metal_layers_list:
     return layernumbers 
 
 
-  def add_offset (self, offset): 
+  def has_references (self):
+    """List of names of layers that use Reference-based (offset) positioning.
+    Returns:
+        list of string: names of layers where .reference is set
+    """
+    return [metal.name for metal in self.metals if metal.reference]
+
+
+  def resolve_references (self, dielectrics_list):
+    """Resolve all Reference-based layers' offsets into absolute zmin/zmax, in dependency order
+       (a Layer can reference another Layer, which must be resolved first). Modeled on
+       derived_layers_list.get_ordered(): repeat until no more progress can be made; any layers
+       still unresolved at that point are part of a circular or unresolvable Reference chain.
+    Args:
+        dielectrics_list (dielectric_layers_list): dielectrics, used as possible Reference targets
+    """
+    remaining = [metal for metal in self.metals if not metal.resolved]
+
+    while remaining:
+      progress = False
+      still_remaining = []
+
+      for metal in remaining:
+        target_dielectric = dielectrics_list.get_by_name(metal.reference)
+        target_metal = self.getbylayername(metal.reference)
+        # ready to resolve once the reference names a Dielectric (always resolvable), or a Layer
+        # that is itself already resolved; an unresolvable/ambiguous name is also "ready" here so
+        # that metal.resolve() reports the precise error immediately instead of stalling this loop
+        if target_dielectric is not None or target_metal is None or target_metal.resolved:
+          metal.resolve(dielectrics_list, self)
+          progress = True
+        else:
+          still_remaining.append(metal)
+
+      if not progress:
+        unresolved_names = [metal.name for metal in still_remaining]
+        print('ERROR: Circular or unresolvable Reference in Layers: ', unresolved_names)
+        exit(1)
+
+      remaining = still_remaining
+
+
+  def add_offset (self, offset):
     """Add offset in z position to all metal layers, used to add stackup height for final z position
     Args:
         offset (float): z offset in project units
@@ -702,6 +990,11 @@ def read_substrate (XML_filename):
     substrate_tree = xml.etree.ElementTree.parse(XML_filename, parser=_make_comment_preserving_parser())
     substrate_root = substrate_tree.getroot()
 
+    # checked here (once per file load) rather than inside parse_substrate() itself, which
+    # is also called repeatedly for in-memory live-preview re-derivation (e.g. by a GUI
+    # editor on every edit) - that would otherwise reprint the same warning constantly
+    check_schema_version(substrate_root)
+
     return parse_substrate(substrate_root)
 
   else:
@@ -772,6 +1065,9 @@ def parse_substrate (substrate_root):
   for data in  substrate_root.iter("Layer"):
       metals_list.append (metal_layer(data))
 
+  # resolve Reference-based layers (offsets from a Dielectric or another Layer edge) into absolute zmin/zmax
+  metals_list.resolve_references(dielectrics_list)
+
   # sort metals by zmin and detect their neighbors above/below
   metals_list.sort_and_evaluate()
 
@@ -789,6 +1085,10 @@ def parse_substrate (substrate_root):
       assert data!=None
       offset = float(data.get("Offset"))
   if offset > 0:
+    referenced_layers = metals_list.has_references()
+    if referenced_layers:
+      print('ERROR: <Substrate Offset="..."> cannot be combined with Reference-based Layer positioning. Layers using Reference: ', referenced_layers)
+      exit(1)
     metals_list.add_offset(offset)
 
   # register metals with the enclosing dielectrics
