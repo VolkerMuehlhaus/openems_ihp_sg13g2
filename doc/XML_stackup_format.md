@@ -5,10 +5,9 @@ It defines the process stackup used to build a 3D simulation model from GDSII: m
 the dielectric stack, the drawn metal/via layers and their GDSII layer numbers, optional
 derived (computed) layers, and optional thermal-conductivity tables.
 
-Reference files in this repo: [`SG13G2_200um.xml`](../SG13G2_200um.xml) (basic stackup),
-[`SG13G2_resistors_200um.xml`](../SG13G2_resistors_200um.xml) (adds resistor materials and
-derived layers), [`SG13G2_200um_test_derived.xml`](../SG13G2_200um_test_derived.xml) (derived
-layer examples including `SIZE`).
+Reference files in this repo: [`SG13G2_200um.xml`](../workflow/SG13G2_200um.xml) (basic
+stackup) and [`SG13G2_with_resistors_200um.xml`](../more_examples/resistors_sg13g2/SG13G2_with_resistors_200um.xml)
+(adds resistor materials and derived-layer examples using `AND`/`OR`/`NOT`).
 
 ## Top-level structure
 
@@ -35,7 +34,10 @@ layer examples including `SIZE`).
 </Stackup>
 ```
 
-`schemaVersion` is informational only — the reader does not currently check or branch on it.
+`schemaVersion` doesn't change how the reader parses a file (no attribute's meaning branches
+on it) — but `read_substrate()` does print a warning if a file declares a `schemaVersion`
+newer than `util_stackup_reader.SUPPORTED_SCHEMA_VERSION` (currently `"3.0"`), since such a
+file may use attributes this version of the reader doesn't know about yet.
 
 ## `<Materials>`
 
@@ -75,19 +77,27 @@ Container for the dielectric stack and drawn layers. `LengthUnit` sets the unit 
 ### `<Dielectrics>`
 
 Defines the vertical dielectric stack, independent of GDSII — these layers exist everywhere
-and are not drawn as polygons. Order in the file is **top to bottom**; z-positions are
-computed automatically by stacking `Thickness` values from the top down (`calculate_zpositions()`
-walks the list in reverse).
+and are not drawn as polygons. Order in the file is **top to bottom**. Three ways to position
+a `<Dielectric>`, in the order they take priority:
 
-| Attribute   | Required | Description |
-|-------------|----------|-------------|
-| `Name`      | yes      | Dielectric name. |
-| `Material`  | yes      | References a `<Material>` by name. |
-| `Thickness` | yes*     | Layer thickness. Used to auto-stack this dielectric relative to its neighbors. |
-| `Zmin`/`Zmax` | no     | Explicit absolute z-position instead of `Thickness`. If both are given, they take precedence over `Thickness` and this dielectric is excluded from the auto-stacking pass. |
-| `Boundary`  | no       | GDSII layer number that defines this dielectric's finite (x,y) extent in the model. Optional — omit for a dielectric that simply fills the whole simulation domain. |
+1. **Absolute** — both `Zmin` and `Zmax` given (no `Reference`).
+2. **Reference-relative** — `Reference` given (see below).
+3. **Implicit stacking** (the default/legacy behavior) — neither of the above: z-positions are
+   computed automatically by stacking `Thickness` values from the top down
+   (`calculate_zpositions()` walks the list in reverse).
 
-\* `Thickness` is required unless `Zmin`/`Zmax` are both given.
+| Attribute       | Required | Default | Description |
+|-----------------|----------|---------|--------------|
+| `Name`          | yes      | —       | Dielectric name. Must be unique across `<Dielectrics>`. |
+| `Material`      | yes      | —       | References a `<Material>` by name. |
+| `Thickness`     | yes*     | —       | Layer thickness. Used to auto-stack this dielectric relative to its neighbors, or (with `Reference`) to size it from the reference edge. |
+| `Zmin`/`Zmax`   | no       | —       | Absolute z-position instead of `Thickness` (both required together); or, with `Reference` set, offsets from the reference edge (both optional there — see below). |
+| `Reference`     | no       | —       | Name of another `<Dielectric>` to position this one relative to. |
+| `ReferenceEdge` | no       | `Top`   | `Top` or `Bottom` (case-insensitive). Only meaningful with `Reference` set. |
+| `Boundary`      | no       | —       | GDSII layer number that defines this dielectric's finite (x,y) extent in the model. Optional — omit for a dielectric that simply fills the whole simulation domain. |
+
+\* `Thickness` is required unless `Zmin`/`Zmax` are both given (absolute mode), or `Zmax` is
+given (`Reference` mode).
 
 ```xml
 <Dielectrics>
@@ -105,6 +115,40 @@ With an explicit boundary layer instead of the full domain:
 <Dielectric Name="Package" Material="MoldCompound" Thickness="500" Boundary="299"/>
 ```
 
+#### Reference-relative positioning (Dielectrics)
+
+Like `<Layer>`'s `Reference` (below), but Dielectrics keep `Thickness` as their primary size
+instead of requiring both `Zmin`/`Zmax`: `Zmin` defaults to `0` (start right at the reference
+edge — the common case) and `Zmax` defaults to `Zmin + Thickness`. Either can still be given
+explicitly to override — e.g. a small designed gap before this dielectric starts.
+
+```xml
+<Dielectric Name="SiO2" Material="SiO2" Thickness="15.7303"
+            Reference="EPI" ReferenceEdge="Top" />
+<!-- equivalent to Zmin="0" Zmax="15.7303" offset from EPI's top edge -->
+```
+
+`Reference` on a Dielectric can only target another `<Dielectric>` — never a `<Layer>` (Layers
+are resolved after Dielectrics, so the reverse would be a circular pipeline dependency).
+
+**Implicit stacking, made explicit internally:** the reader auto-assigns an in-memory
+`Reference` (to the nearest dielectric below it in file order that is *also* using implicit
+stacking, `ReferenceEdge="Top"`) to every dielectric that has neither an explicit `Reference`
+nor an absolute position — this is purely descriptive (it does not change the computed
+z-position, and by default it is **not** written back into the XML file). It lets other code
+treat every dielectric's positioning uniformly through `.reference`/`.reference_edge`, and lets
+the Stackup Editor's Dielectrics tab show a live Reference-style relationship even for
+old-style, purely `Thickness`-stacked files. The Stackup Editor offers, once per file per
+editing session at Save time, to write these auto-assigned references into the XML — declining
+leaves the file exactly as implicit as before (same resulting z-positions either way).
+
+Note one legacy quirk this auto-assignment deliberately preserves: an absolute-position or
+explicit-`Reference` dielectric sitting between two implicit ones is transparent to implicit
+stacking — implicit dielectrics keep stacking against each other as if it weren't there, not
+against its own `Zmax`. Mixing absolute/Reference dielectrics with implicit ones is uncommon;
+if you rely on one sitting directly beneath an implicit dielectric, give that implicit
+dielectric an explicit `Reference` instead of relying on file order.
+
 ### `<Layers>`
 
 Drawn layers: metals, vias, sheet resistors, and dielectric "bricks" that are read from
@@ -114,14 +158,16 @@ An optional `<Substrate Offset="..."/>` element shifts the z-position of every `
 a fixed amount (used e.g. to place the drawn stack on top of a backside/substrate region
 that is itself modeled with negative z).
 
-| Attribute | Required | Description |
-|-----------|----------|--------------|
-| `Name`    | yes      | Layer name, used for lookups (`getbylayername`) and in port definitions (`from_layername`/`to_layername` etc. elsewhere in the pipeline). |
-| `Type`    | yes      | `conductor`, `via`, `dielectric`, or `sheet` (see below). |
-| `Material`| yes      | References a `<Material>` by name. |
-| `Zmin`    | yes      | Bottom z-position. |
-| `Zmax`    | yes      | Top z-position. Equal to `Zmin` forces `Type` to `sheet` regardless of the stated `Type`. |
-| `Layer`   | yes      | GDSII layer number. Also used as the target layer number for a [derived layer](#derivedlayers-boolean-operations-on-layers), in which case its geometry does not need to exist directly in the GDSII file. |
+| Attribute | Required | Default | Description |
+|-----------|----------|---------|--------------|
+| `Name`    | yes      | —       | Layer name, used for lookups (`getbylayername`) and in port definitions (`from_layername`/`to_layername` etc. elsewhere in the pipeline). Must be unique across `<Layers>`, and must not collide with a `<Dielectric>` name (see `Reference` below). |
+| `Type`    | yes      | —       | `conductor`, `via`, `dielectric`, or `sheet` (see below). |
+| `Material`| yes      | —       | References a `<Material>` by name. |
+| `Zmin`    | yes      | —       | Bottom z-position — absolute, or an offset from `Reference`'s edge if `Reference` is set (see below). |
+| `Zmax`    | yes      | —       | Top z-position, same absolute-vs-offset rule as `Zmin`. Equal to `Zmin` forces `Type` to `sheet` regardless of the stated `Type`. |
+| `Layer`   | yes      | —       | GDSII layer number. Also used as the target layer number for a [derived layer](#derivedlayers-boolean-operations-on-layers), in which case its geometry does not need to exist directly in the GDSII file. |
+| `Reference` | no     | —       | Name of another `<Dielectric>` or `<Layer>` to position this layer relative to. When set, `Zmin`/`Zmax` are reinterpreted as offsets from the resolved reference edge instead of absolute z (positive = up). Dielectric and Layer names share one namespace for this lookup, so a name must not exist as both. |
+| `ReferenceEdge` | no | `Top`   | `Top` or `Bottom` (case-insensitive). Only meaningful with `Reference` set. For a `<Dielectric>` target: its top/bottom z. For a `<Layer>` target: its `Zmax`/`Zmin`. |
 
 Layer `Type` meanings:
 - **`conductor`** — a normal metal layer with thickness (`Zmax > Zmin`).
@@ -141,6 +187,39 @@ Layer `Type` meanings:
   <Layer Name="RSIL"   Type="sheet"     Zmin="0.4"     Zmax="0.4"   Material="RSIL"   Layer="314"/>
 </Layers>
 ```
+
+#### Reference-relative positioning (Layers)
+
+Instead of an absolute z-position, a `<Layer>` can position itself relative to the top or
+bottom edge of a named `<Dielectric>` or another `<Layer>`, by setting `Reference`
+(+ optional `ReferenceEdge`, default `Top`). `Zmin`/`Zmax` are then offsets from that edge
+(positive = up), not absolute z — the layer may lie fully inside, fully outside, or straddle
+the reference's own z-range. This avoids hand-recomputing every dependent `<Layer>`'s z-position
+whenever a `<Dielectric Thickness="...">` changes; a `<Layer>` can itself be a `Reference`
+target for another `<Layer>`, chaining any number of levels deep (resolved in dependency order,
+regardless of file order).
+
+```xml
+<Layer Name="Metal1" Type="conductor" Material="Metal1" Layer="8"
+       Reference="Passive" ReferenceEdge="Top" Zmin="-0.5" Zmax="-0.1" />
+
+<Layer Name="Via1" Type="via" Material="Via1" Layer="19"
+       Reference="Metal1" ReferenceEdge="Top" Zmin="0" Zmax="0.54" />
+```
+
+Two rules apply:
+
+- **Shared namespace**: `Reference` is looked up against `<Dielectric>` names and `<Layer>`
+  names together, so a name must not exist as both — and `<Layer>` names must be unique (unlike
+  the general case, this is enforced when `Reference` is used).
+- **Mutual exclusivity with `<Substrate Offset="...">`**: a file must not mix
+  `Reference`-based `<Layer>` positioning with a nonzero `<Substrate Offset="...">` — it would
+  be ambiguous whether the offset applies before or after reference resolution. Use `Reference`
+  to point at a backside dielectric's edge directly instead of using `Offset`.
+
+`Reference` is orthogonal to [`<DerivedLayers>`](#derivedlayers-boolean-operations-on-layers) —
+a derived layer's own `<Layer>` entry (the one giving it a Z-position/material) can use
+`Reference` like any other layer.
 
 ### `<DerivedLayers>` (boolean operations on layers)
 
