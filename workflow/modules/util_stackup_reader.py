@@ -32,8 +32,12 @@
 #              still registered somewhere instead of silently dropped from metals_inside
 # 15 Aug 2026: added a schemaVersion check - prints a warning (does not abort) when a
 #              stackup file declares a schemaVersion newer than SUPPORTED_SCHEMA_VERSION
+# 16 Aug 2026: fixed register_metals_inside() to compare zmin/zmax with a small epsilon
+#              tolerance, so floating-point noise between two independently-accumulated
+#              z values that represent the same physical boundary can no longer misassign
+#              a boundary-sitting metal (zero real overlap) to the dielectric below it
 
-__version__ = "1.6.0"
+__version__ = "1.6.1"
 
 import os
 import math
@@ -452,13 +456,26 @@ class dielectric_layers_list:
        to be registered exactly once (with the dielectric it starts in), not silently dropped
        everywhere. Membership by zmin alone also naturally covers a metal that exactly fills
        its dielectric's whole height (no separate exact-match case needed).
+
+       _BOUNDARY_EPSILON shifts both comparisons inward by a tiny amount: a metal's zmin and
+       a dielectric's zmin/zmax can both represent the exact same physical boundary point yet
+       differ by float noise on the order of 1e-13 - one computed via cumulative Thickness
+       summation down the dielectric stack, the other via a Layer's own Zmin plus a Substrate
+       Offset, two unrelated accumulation paths. Comparing them with a bare "<"/">=" lets that
+       noise decide, unpredictably, whether a boundary-sitting metal (zero actual overlap)
+       gets misassigned to the dielectric below instead of the one above it actually starts
+       in. 1e-6 (1 nanometre) is far larger than that noise and far smaller than any real
+       stackup dimension in this schema (micron-scale), so it only ever affects true
+       boundary coincidences, never a metal that's genuinely, non-trivially inside a
+       dielectric.
     Args:
         metals_list (metal_layers_list): metals read from stackup
     """
+    _BOUNDARY_EPSILON = 1e-6
     for dielectric in self.dielectrics:
       enclosed = []
       for metal in metals_list.metals:
-        if (metal.zmin >= dielectric.zmin) and (metal.zmin < dielectric.zmax):
+        if (metal.zmin >= dielectric.zmin - _BOUNDARY_EPSILON) and (metal.zmin < dielectric.zmax - _BOUNDARY_EPSILON):
           enclosed.append(metal)
       dielectric.metals_inside = enclosed
 
