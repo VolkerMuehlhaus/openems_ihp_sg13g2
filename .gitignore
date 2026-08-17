@@ -161,3 +161,6 @@ cython_debug/
 
 sub-1/
 sub-2/
+
+# Local test data (not tracked)
+test-data/

@@ -32,6 +32,8 @@ from openEMS import openEMS
 from openEMS.physical_constants import *
 
 import numpy as np
+import shapely.geometry
+import shapely.ops
 
 # global variable for port metadata information
 all_port_information_struct = {}
@@ -240,6 +242,108 @@ class all_field_dumps():
 
 
 
+# ---------------------- keyhole / hole splitting for polygon extrusion --------------------
+
+
+def _split_holes_from_shapely_polygon (polygon):
+  """Recursively cut a shapely Polygon that has one or more interior rings (holes) into
+  simple, hole-free polygons of the same total area.
+
+  Each hole is removed by cutting the polygon with a full-width horizontal line through
+  the vertical center of that hole's bounding box. Such a line is guaranteed to cross the
+  hole's boundary (by the intermediate value theorem) as well as the outer boundary, so the
+  hole ring is opened up and distributed onto the two resulting pieces, neither of which
+  still encloses that hole. Any piece that still has holes (multiple/nested holes) is
+  processed again, so this terminates once every hole has been cut through.
+
+  Args:
+      polygon (shapely.geometry.Polygon): candidate polygon, possibly with holes
+
+  Returns:
+      list of shapely.geometry.Polygon: simple polygons (no interiors) covering the same area
+  """
+
+  if len(polygon.interiors) == 0:
+    return [polygon]
+
+  hole = polygon.interiors[0]
+  _hxmin, hymin, _hxmax, hymax = hole.bounds
+  pxmin, _pymin, pxmax, _pymax = polygon.bounds
+
+  # cut with a horizontal line through the vertical center of the hole, extended well
+  # beyond the outer boundary on both sides so it fully crosses the polygon
+  cut_y = (hymin + hymax) / 2.0
+  margin = max(pxmax - pxmin, 1.0)
+  cutline = shapely.geometry.LineString([(pxmin - margin, cut_y), (pxmax + margin, cut_y)])
+
+  pieces = shapely.ops.split(polygon, cutline)
+
+  result = []
+  for piece in pieces.geoms:
+    if piece.is_empty or piece.area <= 0:
+      continue
+    if len(piece.interiors) > 0:
+      # still has holes (other holes not on this cut line, or nested holes): recurse
+      result.extend(_split_holes_from_shapely_polygon(piece))
+    else:
+      result.append(piece)
+
+  return result
+
+
+def _get_simple_polygon_points (poly):
+  """Resolve one gds_polygon (from util_gds_reader) into the list of [pts_x, pts_y] point
+  arrays needed to represent it as one or more simple, hole-free, non-self-intersecting
+  polygons of the same total area — the format CSXCAD's AddLinPoly(points=...) expects.
+
+  GDSII boundary elements cannot natively represent a hole, so tools (and our own derived
+  layer booleans in util_gds_reader.resolve_derived_layers) encode a hole, or disjoint
+  islands from a NOT operation, as a single point sequence that revisits a vertex via a
+  zero-width bridge (a "keyhole" polygon). AddLinPoly() expects a simple polygon and does
+  not accept that construct, so it is resolved here, immediately before extrusion.
+
+  Args:
+      poly (gds_polygon): candidate polygon, possibly self-intersecting or a keyhole polygon
+
+  Returns:
+      list of [ndarray, ndarray]: [poly.pts] unchanged if it was already simple, otherwise
+      one [pts_x, pts_y] pair per simple, hole-free piece needed to cover the same area.
+  """
+
+  if len(poly.pts_x) < 3:
+    return [poly.pts]
+
+  coords = list(zip(poly.pts_x.tolist(), poly.pts_y.tolist()))
+  shapely_poly = shapely.geometry.Polygon(coords)
+
+  # already simple and hole-free: nothing to do
+  if shapely_poly.is_valid and len(shapely_poly.interiors) == 0:
+    return [poly.pts]
+
+  # repair self-intersections; for a keyhole point sequence this also correctly
+  # reconstructs the hole (or disjoint islands) it was encoding
+  repaired = shapely_poly.buffer(0)
+
+  if repaired.is_empty:
+    return []
+
+  pieces = list(repaired.geoms) if repaired.geom_type == 'MultiPolygon' else [repaired]
+
+  simple_pieces = []
+  for piece in pieces:
+    simple_pieces.extend(_split_holes_from_shapely_polygon(piece))
+
+  result = []
+  for piece in simple_pieces:
+    if piece.is_empty or piece.area <= 0:
+      continue
+    x, y = piece.exterior.coords.xy
+    # exterior.coords repeats the first point at the end, drop it
+    result.append([np.array(x[:-1]), np.array(y[:-1])])
+
+  return result if result else [poly.pts]
+
+
 def addGeometry_to_CSX (CSX, excite_portnumbers,simulation_ports,FDTD, materials_list, dielectrics_list, metals_list, allpolygons):
 # Add polygons   
 
@@ -254,6 +358,10 @@ def addGeometry_to_CSX (CSX, excite_portnumbers,simulation_ports,FDTD, materials
 
         all_assigned = metals_list.getallbylayernumber (poly.layernum)
         if all_assigned != None:
+            # resolve keyhole/self-intersecting polygons (holes, or disjoint islands from a
+            # derived-layer NOT) into simple, hole-free pieces once per polygon, since a layer
+            # can map to more than one material (e.g. MIM metal + dielectric)
+            point_sets = _get_simple_polygon_points(poly)
             for metal in all_assigned:
                 materialname = metal.material
                 
@@ -272,14 +380,15 @@ def addGeometry_to_CSX (CSX, excite_portnumbers,simulation_ports,FDTD, materials
                         if material.color != "":
                             CSX_material.SetColor('#' + material.color, 255)  # transparency value 255 = solid
 
-                    # add Polygon to CSX 
+                    # add Polygon to CSX
                     # remember value for optional easyMesh meshing algorithm, which works on CSX polygons rather than our GDS polygons
                     # use different prio for metal and via here, because easyMesh evaluates that to prioritize closely spaced edges
-                    if metal.is_via:
-                        p = CSX_material.AddLinPoly(priority=50, points=poly.pts, norm_dir ='z', elevation=metal.zmin, length=metal.thickness)
-                    else:    
-                        p = CSX_material.AddLinPoly(priority=200, points=poly.pts, norm_dir ='z', elevation=metal.zmin, length=metal.thickness)
-                    poly.CSXpoly = p
+                    for points in point_sets:
+                        if metal.is_via:
+                            p = CSX_material.AddLinPoly(priority=50, points=points, norm_dir ='z', elevation=metal.zmin, length=metal.thickness)
+                        else:
+                            p = CSX_material.AddLinPoly(priority=200, points=points, norm_dir ='z', elevation=metal.zmin, length=metal.thickness)
+                        poly.CSXpoly = p
 
                 else:
                     print('Sheet material assigned to layer', metal.name)
@@ -308,8 +417,9 @@ def addGeometry_to_CSX (CSX, excite_portnumbers,simulation_ports,FDTD, materials
 
                     # add Polygon to CSX but no thickness
                     # remember value for MA meshing algorithm, which works on CSX polygons rather than our GDS polygons
-                    p = CSX_material.AddLinPoly(priority=200, points=poly.pts, norm_dir ='z', elevation=metal.zmin, length=0)
-                    poly.CSXpoly = p
+                    for points in point_sets:
+                        p = CSX_material.AddLinPoly(priority=200, points=points, norm_dir ='z', elevation=metal.zmin, length=0)
+                        poly.CSXpoly = p
 
                 
     return CSX, CSX_materials_list                    
