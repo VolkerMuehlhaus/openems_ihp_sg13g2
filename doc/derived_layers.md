@@ -132,9 +132,11 @@ A circular dependency between derived layers is reported as an error.
 If a boolean result is not simply-connected (e.g. it has a real hole, or a `NOT`
 result splits into disjoint islands), it gets encoded as a single point sequence
 that revisits a vertex via a zero-width bridge. This is handled correctly in the
-mesh-generation step (`create_surfaces_from_polygon` in `util_simulation_setup.py`),
+geometry-extrusion step (`_get_simple_polygon_points` in `util_simulation_setup.py`),
 which is downstream of both native GDSII polygons and derived-layer results: it
-splits the point sequence back into simple loops, reconstructs holes with an OCC
-boolean, and creates a separate surface per disjoint piece. This is independent of
-the derived-layer computation itself and applies to any polygon reaching
-`add_metal_volumes`, native or derived.
+uses `shapely` to repair the self-touching point sequence (reconstructing any real
+hole in the process) and, for a result that still has a hole, cuts through it with a
+full-width line so the two resulting pieces are each simple and hole-free. Each
+piece then gets its own `AddLinPoly()` call. This is independent of the derived-layer
+computation itself and applies to any polygon reaching `addGeometry_to_CSX`, native
+or derived.
