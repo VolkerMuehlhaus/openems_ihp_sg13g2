@@ -16,7 +16,7 @@ please refer to https://www.openems.de/
 and https://docs.openems.de/python/install.html#python-linux-install 
 
 
-In addition to OpenEMS, the Python module gdspy must be installed.
+In addition to OpenEMS, the Python modules gdspy and shapely must be installed.
 
 # Automatic meshing
 Two meshing methods are available in this workflow. In the examples, **automatic meshing based on geometry** is enabled, which tries to detect edges and diagonal areas that need local refinement. Mesh lines that are too close (resulting in slow simulation) will be removed or merged automatically.
