@@ -958,10 +958,18 @@ class thermal_tables_list(list):
 
 # ----------- parse substrate file, get materials from list created before -----------
 
+GENERATOR_COMMENT_PREFIX = "Created/modified using the XML Stackup Editor in"
 DESCRIPTION_COMMENT_PREFIX = "File description:"
+_HEADER_SEPARATOR_TEXT = "=" * 60
 # duplicated (not imported) from util_stackup_writer.py deliberately: that module
 # is specific to the interactive XML editor, while this reader module is used by
-# the whole gds2palace pipeline and is meant to stay independent of it.
+# the whole gds2palace pipeline and is meant to stay independent of it. Two formats
+# are recognized: the current one (generator stamp, separator, one comment per
+# description line with nothing prepended, closing separator) and the older one
+# (generator stamp, separator, a single comment prefixed with
+# DESCRIPTION_COMMENT_PREFIX holding the whole possibly-multi-line description) that
+# util_stackup_writer.py itself still reads for backward compatibility with files
+# saved before the format changed.
 
 
 def read_file_description (XML_filename):
@@ -981,6 +989,23 @@ def read_file_description (XML_filename):
     root = xml.etree.ElementTree.parse(XML_filename, parser=_make_comment_preserving_parser()).getroot()
   except xml.etree.ElementTree.ParseError:
     return ""
+
+  children = list(root)
+  if (len(children) >= 2
+      and children[0].tag is xml.etree.ElementTree.Comment
+      and (children[0].text or "").strip().startswith(GENERATOR_COMMENT_PREFIX)
+      and children[1].tag is xml.etree.ElementTree.Comment
+      and (children[1].text or "").strip() == _HEADER_SEPARATOR_TEXT):
+    lines = []
+    for child in children[2:]:
+      if child.tag is not xml.etree.ElementTree.Comment:
+        break
+      text = (child.text or "").strip()
+      if text == _HEADER_SEPARATOR_TEXT:
+        return "\n".join(lines)
+      lines.append(text)
+    # no closing separator found - not a well-formed current-format block, fall
+    # through to the legacy single-comment lookup below
 
   for child in root:
     if child.tag is xml.etree.ElementTree.Comment:
