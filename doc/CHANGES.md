@@ -2,8 +2,11 @@
 
 This is an (incomplete) list of changes and new features.
 
-## 20-Aug-2026 (2)
+## 20-Aug-2026 (3)
 Corrected a license inconsistency: the repository's LICENSE file said Apache-2.0, while every source file's own header comment already said GPLv3. The code headers were correct — this workflow directly imports and drives the GPLv3-licensed openEMS solver object in-process, with no linking exception covering that use, so GPLv3 is the license actually required here. LICENSE, `pyproject.toml`, and the remaining files that were missing a header now all agree on GPLv3.
+
+## 20-Aug-2026 (2)
+The `gds2openEMS` PyPI package can now be built directly with `python -m build` from this repository (`pyproject.toml` at the repo root, publishing `workflow/modules/` under the `gds2openEMS` name), instead of maintaining a separate manually-synced copy.
 
 ## 20-Aug-2026
 Fixed `write_snp()` writing a hardcoded 50 Ohm reference impedance into the Touchstone (`*.snp`) file header regardless of the actual port impedance used in the simulation. All model scripts now pass the real port reference impedance from `simulation_ports`, so the header correctly reflects non-50 Ohm setups (e.g. differential/GSG ports).
