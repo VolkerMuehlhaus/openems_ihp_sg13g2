@@ -12,6 +12,7 @@ build/
 develop-eggs/
 dist/
 downloads/
+README_pypi.md
 eggs/
 .eggs/
 lib/

@@ -1,5 +1,7 @@
 These scripts support the workflow when using openEMS. 
 
+**build_pypi_readme.py** regenerates `README_pypi.md` at the repo root from `README.md`, rewriting relative `./doc/...` links to absolute GitHub URLs so images render on the PyPI package page. Run this before `python -m build`, from the repo root: `python scripts/build_pypi_readme.py`
+
 **deembed_openEMS.py** is a script to deembed parasitic inductance of ports by cascading negative series L at each port. Output is written to a new file with suffix "_deembedded". 
 
 Usage:
