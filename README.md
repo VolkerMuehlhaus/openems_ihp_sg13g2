@@ -3,6 +3,8 @@
 The files provided here enable openEMS EM simulation with layouts
 created for the IHP SG13G2 RFIC technology.
 
+See [CHANGES.md](./doc/CHANGES.md) for recent additions and fixes.
+
 # Documentation
 An extensive User's Guide of this GDSII to openEMS workflow is available in PDF format here:  
 [Using OpenEMS Python with IHP SG13G2 v2](./doc/Using_OpenEMS_Python_with_IHP_SG13G2_v2.pdf) 

@@ -142,7 +142,7 @@ if not preview_only:
 
     # write Touchstone S1P file
     s1p_name = os.path.join(sim_path, model_basename + '.s1p')
-    utilities.write_snp (np.array([s11]),f, s1p_name)
+    utilities.write_snp (np.array([s11]),f, s1p_name, z0=simulation_ports.get_reference_impedance())
 
     # plot return loss
     fig, axis = plt.subplots(num="Return Loss", tight_layout=True)

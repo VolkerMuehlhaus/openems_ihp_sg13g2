@@ -141,7 +141,7 @@ if preview_only==False:
     s22 = utilities.calculate_Sij (2, 2, f, sim_path, simulation_ports)
 
     s2p_name = os.path.join(sim_path, model_basename + '.s2p')
-    utilities.write_snp (np.array([[s11, s21],[s12,s22]]),f, s2p_name)
+    utilities.write_snp (np.array([[s11, s21],[s12,s22]]),f, s2p_name, z0=simulation_ports.get_reference_impedance())
 
     # calculate inductor parameters using Z parameters
     z11 = utilities.calculate_Zij_2port (1, 1, f, sim_path, simulation_ports)

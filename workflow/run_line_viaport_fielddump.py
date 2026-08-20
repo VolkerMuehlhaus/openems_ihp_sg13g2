@@ -165,7 +165,7 @@ if preview_only==False:
 
     # write Touchstone S2P file
     s2p_name = os.path.join(sim_path, model_basename + '.s2p')
-    utilities.write_snp (np.array([[s11, s21],[s12,s22]]),f, s2p_name)
+    utilities.write_snp (np.array([[s11, s21],[s12,s22]]),f, s2p_name, z0=simulation_ports.get_reference_impedance())
 
     fig, axis = plt.subplots(num='Return Loss', tight_layout=True)
     axis.plot(f/1e9, dB(s11), 'k-',  linewidth=2, label='S11 (dB)')

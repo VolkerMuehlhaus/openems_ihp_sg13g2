@@ -127,12 +127,12 @@ if not preview_only:
   s11 = utilities.calculate_Sij (1, 1, f, sim_path, simulation_ports)
 
   s1p_name = os.path.join(sim_path, model_basename + '.s1p')
-  utilities.write_snp (np.array([s11]),f, s1p_name)
+  Z0 = simulation_ports.get_reference_impedance()
+  utilities.write_snp (np.array([s11]),f, s1p_name, z0=Z0)
 
   # ignore divide by zero warning during inductor calculation at DC
   np.seterr(divide='ignore', invalid='ignore')
 
-  Z0 = simulation_ports.get_port_by_number(1).port_Z0
   zdiff = Z0 * (1+s11)/(1-s11)
   omega = 2*np.pi*f
   Qdiff = zdiff.imag/zdiff.real
