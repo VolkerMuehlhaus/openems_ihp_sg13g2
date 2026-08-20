@@ -16,7 +16,9 @@ please refer to https://www.openems.de/
 and https://docs.openems.de/python/install.html#python-linux-install 
 
 
-In addition to OpenEMS, the Python modules gdspy and shapely must be installed.
+In addition to OpenEMS (which includes the CSXCAD Python bindings used directly by this workflow), the Python modules gdspy, shapely, numpy and matplotlib must be installed.
+
+The `model_syntax_gds2openEMS` example under `more_examples/` shows an alternative syntax that uses the `gds2openEMS` PyPI package (`pip install gds2openEMS`) instead of a local copy of the `workflow/modules` code — that package is a separate publish of this repository's `workflow/modules` folder.
 
 # Automatic meshing
 Two meshing methods are available in this workflow. In the examples, **automatic meshing based on geometry** is enabled, which tries to detect edges and diagonal areas that need local refinement. Mesh lines that are too close (resulting in slow simulation) will be removed or merged automatically.
