@@ -156,7 +156,9 @@ if not preview_only:
 
     # write Touchstone S2P file
     s2p_name = os.path.join(sim_path, model_basename + '.s2p')
-    utilities.write_snp (np.array([[s11, s21],[s12,s22]]),f, s2p_name)
+    # Z0 is the combined GSG/differential reference impedance (see comment above),
+    # not simulation_ports' per-CSX-port port_Z0 (2*Z0) used only for CalcPort()'s wave decomposition
+    utilities.write_snp (np.array([[s11, s21],[s12,s22]]),f, s2p_name, z0=Z0)
 
 
     # define dB function for S-parameters

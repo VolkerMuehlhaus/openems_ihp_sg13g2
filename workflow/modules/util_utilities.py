@@ -234,7 +234,7 @@ def calculate_Zij(i, j, f, sim_path, simulation_ports):
 
 # =========================== S-parameter output  =================================
 
-def write_snp (Smatrix,f, filename):
+def write_snp (Smatrix,f, filename, z0=50):
     # Smatrix input must np.array[s11] or np.array[[s11,s21],[s12,s22]], more ports are also supported
 
     print('Creating  S-parameter file')
@@ -242,7 +242,7 @@ def write_snp (Smatrix,f, filename):
     numfreq = len(f)
 
     snp_file = open(filename, 'w')
-    snp_file.write('#   Hz   S  RI   R   50\n')
+    snp_file.write(f'#   Hz   S  RI   R   {z0:g}\n')
     snp_file.write('!\n')
 
     # address elements as Sij

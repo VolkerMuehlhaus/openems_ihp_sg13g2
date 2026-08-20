@@ -151,7 +151,7 @@ if preview_only==False:
     s44 = utilities.calculate_Sij (4, 4, f, sim_path, simulation_ports)
 
     s4p_name = os.path.join(sim_path, model_basename + '.s4p')
-    utilities.write_snp (np.array([[s11,s21,s31,s41], [s12,s22,s32,s42], [s13,s23,s33,s43], [s14,s24,s34,s44]]),f, s4p_name)
+    utilities.write_snp (np.array([[s11,s21,s31,s41], [s12,s22,s32,s42], [s13,s23,s33,s43], [s14,s24,s34,s44]]),f, s4p_name, z0=simulation_ports.get_reference_impedance())
 
     print('\nStarting plots')
 

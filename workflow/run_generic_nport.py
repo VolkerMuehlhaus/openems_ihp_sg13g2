@@ -155,6 +155,6 @@ for i in range(1, num_ports + 1):
 
 # Write to Touchstone *.snp file
 snp_name = os.path.join(sim_path, model_basename + '.s' + str(num_ports) + 'p')
-utilities.write_snp(s_params, f, snp_name)
+utilities.write_snp(s_params, f, snp_name, z0=simulation_ports.get_reference_impedance())
 
 print('Created S-parameter output file at ', snp_name)

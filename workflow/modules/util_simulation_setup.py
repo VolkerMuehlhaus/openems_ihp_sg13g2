@@ -93,8 +93,16 @@ class all_simulation_ports:
       return found       
   
   def get_port_by_number (self, portnum):
-      return self.ports[portnum-1] 
-  
+      return self.ports[portnum-1]
+
+  def get_reference_impedance (self):
+      # common port reference impedance for all ports, raises if ports differ
+      Z0 = self.ports[0].port_Z0
+      for port in self.ports[1:]:
+          if port.port_Z0 != Z0:
+              raise RuntimeError("All ports must use the same reference impedance.")
+      return Z0
+
   def apply_layernumber_offset (self, offset):
       newportlayers = []    
       for port in self.ports:
@@ -1003,7 +1011,7 @@ def runOpenEMS (excite_ports, settings):
 
         # Write to Touchstone *.snp file
         snp_name = os.path.join(sim_path, model_basename + '.s' + str(num_ports) + 'p')
-        utilities.write_snp(s_params, f, snp_name)
+        utilities.write_snp(s_params, f, snp_name, z0=simulation_ports.get_reference_impedance())
 
         print('Created S-parameter output file at ', snp_name)
 
