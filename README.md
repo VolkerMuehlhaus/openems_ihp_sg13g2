@@ -86,3 +86,7 @@ The resulting S-parameters can be used for simulation, but you can also extract 
 For all models listed above, polygons for layout and port shape are read from GDSII files. This model is different, it shows how rectangles and polygons can be added by code lines. This can be used in addition to GDSII layout, or instead of GDSII layout.
 
 ![plot](./doc/png/run_line_noGDSII.png)
+
+# License
+
+This project is licensed under the GNU General Public License v3.0 or later (GPL-3.0-or-later) - see [LICENSE](./LICENSE) for the full text.

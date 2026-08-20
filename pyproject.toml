@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=65", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gds2openEMS"
+dynamic = ["version"]
+description = "Create and run openEMS FDTD model from RFIC GDSII layout file"
+authors = [
+    { name = "Volker Muehlhaus", email = "volker@muehlhaus.com" }
+]
+license = "GPL-3.0-or-later"
+readme = "README_pypi.md"
+requires-python = ">=3.9"
+dependencies = [
+    "gdspy>1.6.0",
+    "CSXCAD",
+    "openEMS",
+    "numpy",
+    "shapely",
+]
+
+[project.urls]
+Homepage = "https://github.com/VolkerMuehlhaus/openems_ihp_sg13g2"
+Repository = "https://github.com/VolkerMuehlhaus/openems_ihp_sg13g2"
+
+[tool.setuptools.dynamic]
+version = {attr = "gds2openEMS.__version__"}
+
+[tool.setuptools]
+package-dir = {"gds2openEMS" = "workflow/modules"}
+packages = ["gds2openEMS"]
