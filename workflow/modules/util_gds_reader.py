@@ -445,8 +445,18 @@ def resolve_derived_layers (cell, derived_layers, layerlist, purposelist, layer_
     # fold operands pairwise: (op1 <operation> op2) <operation> op3 ...
     result = operand_polygons[0]
     for next_operand in operand_polygons[1:]:
-      boolean_result = gdspy.boolean(result, next_operand, operation, max_points=199)
-      result = boolean_result.polygons if boolean_result is not None else []
+      if len(result) == 0 or len(next_operand) == 0:
+        # gdspy.boolean() cannot handle an empty operand (e.g. a layer with no polygons
+        # in this cell) and raises IndexError internally - apply the boolean identity instead
+        if operation == 'and':
+          result = []
+        elif operation == 'not':
+          result = [] if len(result) == 0 else result
+        else:  # 'or'
+          result = next_operand if len(result) == 0 else result
+      else:
+        boolean_result = gdspy.boolean(result, next_operand, operation, max_points=199)
+        result = boolean_result.polygons if boolean_result is not None else []
 
     # optionally grow (positive) or shrink (negative) the outline of the result
     if derived.oversize != 0 and len(result) > 0:

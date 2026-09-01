@@ -2,6 +2,11 @@
 
 This is an (incomplete) list of changes and new features.
 
+## 01-Sep-2026
+Fixed a crash in `resolve_derived_layers()`: `gdspy.boolean()` raises `IndexError` when called with an empty operand (e.g. a resistor recognition layer with no polygons in the current cell), which previously aborted the whole GDSII read. The boolean fold now short-circuits using the OR/AND/NOT identity instead whenever either operand is empty. Same fix applied to gds2palace_ihp_sg13g2's independent copy of this reader.
+
+Added a new example, `more_examples/parameterized_XML_stackup`, showing how to override stackup `<Variable>`s (`total_thickness`, `air_thickness`) from a model script via `read_substrate(variable_overrides=...)`, in both the loose top-level variable style and the `settings{}` dictionary style.
+
 ## 20-Aug-2026
 Corrected a license inconsistency: the repository's LICENSE file said Apache-2.0, while every source file's own header comment already said GPLv3. The code headers were correct — this workflow directly imports and drives the GPLv3-licensed openEMS solver object in-process, with no linking exception covering that use, so GPLv3 is the license actually required here. LICENSE, `pyproject.toml`, and the remaining files that were missing a header now all agree on GPLv3.
 
