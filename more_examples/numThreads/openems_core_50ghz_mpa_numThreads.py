@@ -51,7 +51,6 @@ from openEMS.physical_constants import *
 settings = {}
 
 settings['preview_only'] = False  # @brief Enable this to preview model/mesh only, without starting simulation
-settings['postprocess_only'] = False # @brief Enable this to show existing results only, without starting simulation
 
 settings['numThreads'] = 8 #@brief Number of threads, set to 0 for automatic detection by openEMS
 

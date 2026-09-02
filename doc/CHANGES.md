@@ -2,6 +2,25 @@
 
 This is an (incomplete) list of changes and new features.
 
+## 02-Sep-2026
+
+New user's guide, v3
+
+Migrated all 10 `workflow/run_*.py` examples to the `settings{}` dictionary syntax and the `gds2openEMS` PyPI package (`from gds2openEMS import *`), instead of loose top-level variables and a local `modules/` copy. Behavior is unchanged.
+
+This was really two separate things that had gotten tangled together: which code you use (a local `modules/` copy vs. `pip install gds2openEMS`) and which coding style you use (loose variables vs. `settings{}`). They're independent. README.md now documents them as two separate choices.
+
+Removed the `postprocess_only` switch from all example model scripts. It's no longer needed: `runSimulation()` already skips the FDTD solve automatically via a content hash of the model. If the model hasn't changed since the last run, it just reuses the existing result. 
+
+Added `more_examples/local_modules_copy/`, a fully self-contained example (its own `modules/` copy, GDSII layout, and XML stackup) demonstrating the local-copy distribution method on its own. 
+
+`util_simulation_setup.py` module load `import shapely` now fails with a clear error message if shapely module is missing. 
+
+`voltage=0` ports are now actually skipped in scripts that build their excitation list from `simulation_ports.all_active_excitations()`, saving simulation time instead of wasting it. Referencing a never-excited port's S-parameters now fails with a clear error instead of crashing.
+
+Added `scripts/sync_local_modules_copy.py`, so `more_examples/local_modules_copy/modules/` (used to demonstrate the local `modules` folder method) doesn't silently drift out of sync with the canonical source. Run it whenever `workflow/modules/` changes.
+
+
 ## 01-Sep-2026
 Fixed a crash in `resolve_derived_layers()`: `gdspy.boolean()` raises `IndexError` when called with an empty operand (e.g. a resistor recognition layer with no polygons in the current cell), which previously aborted the whole GDSII read. The boolean fold now short-circuits using the OR/AND/NOT identity instead whenever either operand is empty. Same fix applied to gds2palace_ihp_sg13g2's independent copy of this reader.
 

@@ -1,13 +1,22 @@
-# New Python workflow for openEMS with IHP SG13G2
+# gds2openEMS: FDTD simulation workflow for RFIC
 
 The files provided here enable openEMS EM simulation with layouts
 created for the IHP SG13G2 RFIC technology.
 
+# What's New
+
+Migrated all 10 `workflow/run_*.py` examples to the `settings{}` dictionary syntax and the `gds2openEMS` PyPI package (`from gds2openEMS import *`), instead of loose top-level variables and a local `modules/` copy. Behavior is unchanged.
+
+This is to sync usage with the sister project `gds2palace`, for easier re-use of model code between the two simulation methods (FDTD and FEM).  
+
+ Compatibility to existing models is maintained, these will also work with the new workflow code. By changing the examples, we just want to encourage new users to use the new syntax and PyPi installation, which is easier.
+
 See [CHANGES.md](./doc/CHANGES.md) for recent additions and fixes.
 
 # Documentation
-An extensive User's Guide of this GDSII to openEMS workflow is available in PDF format here:  
-[Using OpenEMS Python with IHP SG13G2 v2](./doc/Using_OpenEMS_Python_with_IHP_SG13G2_v2.pdf) 
+An extensive User's Guide of this GDSII to openEMS workflow is available both as Markdown (renders directly on GitHub) and as PDF, generated from the same Markdown source via `scripts/build_userguide_pdf.py`:  
+[Using openEMS with IHP SG13: Python Workflow User's Guide, Markdown](./doc/userguide_md_format/Using_OpenEMS_Python_with_IHP_SG13G2_v3.md)  
+[Using openEMS with IHP SG13: Python Workflow User's Guide, PDF v3](./doc/Using_OpenEMS_Python_with_IHP_SG13G2_v3.pdf)
 
 An overview of the EM solver ecosystem (tools and utilities) for IHP SG13 can be found here:  
 https://github.com/IHP-GmbH/IHP-Open-PDK/tree/main/ihp-sg13g2/libs.doc/doc
@@ -20,15 +29,34 @@ and https://docs.openems.de/python/install.html#python-linux-install
 
 In addition to OpenEMS (which includes the CSXCAD Python bindings used directly by this workflow), the Python modules gdspy, shapely, numpy and matplotlib must be installed.
 
-The `model_syntax_gds2openEMS` example under `more_examples/` shows an alternative syntax that uses the `gds2openEMS` PyPI package (`pip install gds2openEMS`) instead of a local copy of the `workflow/modules` code — that package is a separate publish of this repository's `workflow/modules` folder.
+# Getting the code: pip package vs. local copy
+
+There are two independent ways to get this workflow's code into your model script — pick one, they're interchangeable:
+
+- The recommended new method is **`pip install gds2openEMS`**, using a PyPI package built directly from this repository's `workflow/modules/` folder. Your model script then does `from gds2openEMS import *` and needs no local copy of the workflow code. You can update the gds2openEMS module with `pip install gds2openEMS --upgrade`. All examples under `workflow/` use this type of module import.
+- The traditional **local copy of `workflow/modules/`** means that you clone/download this repository and copy the `modules` folder next to your own model script, which then does `sys.path.insert(...)` + `from modules import *`.  
+This is still fully supported, useful if you want to vendor a specific version, or edit the workflow code itself. `more_examples/local_modules_copy/` is a fully self-contained example written this way (its own `modules/` copy, GDSII layout, and XML stackup, no PyPI package needed).
+
+This is a separate choice from the *coding style* below — you can mix either distribution method with either style. `more_examples/parameterized_XML_stackup/` shows both style options using the local-copy import, for example.
+
+# Model configuration syntax: settings{} dict vs. loose variables
+
+Model scripts can pass their configuration to `setupSimulation()`/`runSimulation()` two ways — again, pick one, the underlying functions accept both:
+
+- The new, recommended method is to use a **`settings = {}` dictionary**, where every parameter/option is a key in one dict: (`settings['fstart'] = 0e9`, `settings['refined_cellsize'] = 1`, ...). This is then passed as `setupSimulation(FDTD=FDTD, settings=settings)`.  
+This style is used in all `workflow/` examples now, and it's also what `gds2palace_ihp_sg13g2` (the sibling AWS Palace / Elmer FEM workflow) uses.  
+As a bonus, `max_cellsize` is computed for you from `fstop`/`unit`/`cells_per_wavelength` instead of you having to compute this explicitely in your own model code.
+- The traditional method was to create model code with **Loose top-level variables** (`fstart = 0e9`, `refined_cellsize = 1`, ...) that are passed individually and positionally. This original style is still fully supported, if you wish to use it. You can find an example for this in `more_examples/local_modules_copy/run_line_viaport.py`.
 
 # Automatic meshing
-Two meshing methods are available in this workflow. In the examples, **automatic meshing based on geometry** is enabled, which tries to detect edges and diagonal areas that need local refinement. Mesh lines that are too close (resulting in slow simulation) will be removed or merged automatically.
+The default used in all models in this repository is to use **automatic meshing based on geometry**, which tries to detect edges and diagonal areas that need local refinement. Mesh lines that are too close (resulting in slow simulation) will be removed or merged automatically.
 
 ![plot](./doc/png/automatic_meshing.png)
 
 # Minimum configuration
-The screenshot below shows a minimum configuration, which consists of the XML technology stackup, the GDSII layout, one simulation model file (here named run_inductor_diffport.py)  and the utility modules with all the “behind the scenes” code that you don’t need to modify.
+The screenshot below shows a minimum configuration for the traditional local-copy path: the XML technology stackup, the GDSII layout, one simulation model file (here named run_inductor_diffport.py) and the utility modules with all the “behind the scenes” code that you don’t need to modify.  
+
+When using the new, recommended installation method with `pip install gds2openEMS` instead, the `modules` folder is NOT required, you just need the XML stackup, the GDSII layout, and your model script.
 
 ![Minimum files](./doc/png/minimum_files.png)
 
@@ -40,13 +68,15 @@ This model simulates a simple thru line, with via ports on both ends. Excitation
 
 ![plot](./doc/png/run_line_viaport.png)
 
-Note that the Metal1 ground plane is modelled and meshed explicitely. It is not recommended to use the bottom PEC boundary for this, because that is a lossless boundary and the Metal1 resistance would not show up in results. Also note that port size will lead to parasitic inductance, port de-embedding is not implemented so far.
+Note that the Metal1 ground plane is modelled and meshed explicitely. It is not recommended to use the bottom PEC boundary for this, because that is a lossless boundary and the Metal1 resistance would not show up in results.  
+
+Also note that port size will lead to **parasitic inductance**. You can find a "quick & dirty" port parasitic removal approach in the script folder: `deembed_openEMS.py` which reads port geometry information created by gds2openEMS and then estimates the inductance that is "built into" each lumped port. This inductance is then removed per port, by cascading a negative inductance value. Note that this method is not exact, and not applicable for composite port configurations like the GSG port example. Take it with a grain of salt!
 
 ## run_line_GSG_complex
 This model simulates a thru line with GSG pads on both ends. To properly simulate this, we use a composite port from two in-plane openEMS ports, one to each side from signal line to the ground pad. To drive the center conductor in-phase between these two ports, one is defined with opposite polarity. Both ports are in parallel, so each of then is defined with 2x the normal impedance.
 The resulting S-parameters for each GSG port are calculated in the evaluation code section, combining the data from the "sub-ports" into one effective GSG port result on each end of the line.
 
-In the model code, layout pre-processing is enable to properly handle the cutouts (holes) in polygons. Without that pre-processing, openEMS polygons would not create the proper shape, due to self-intersecting polygons.
+In the model code, layout pre-processing is done to properly handle the cutouts (holes) in polygons. In the latest gds2openEMS code, that layout pre-processing is always active in the GDSII reader and does not need to be configured in your model code. 
 
 ![plot](./doc/png/run_line_gsg_complex.png)
 
