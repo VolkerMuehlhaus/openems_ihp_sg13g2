@@ -18,15 +18,19 @@ dependencies = [
     "openEMS",
     "numpy",
     "shapely",
+    "PySide6",
 ]
 
 [project.urls]
 Homepage = "https://github.com/VolkerMuehlhaus/openems_ihp_sg13g2"
 Repository = "https://github.com/VolkerMuehlhaus/openems_ihp_sg13g2"
 
+[project.scripts]
+stackupEditor = "stackup_editor.stackupEditor:main"
+
 [tool.setuptools.dynamic]
 version = {attr = "gds2openEMS.__version__"}
 
 [tool.setuptools]
 package-dir = {"gds2openEMS" = "workflow/modules"}
-packages = ["gds2openEMS"]
+packages = ["gds2openEMS", "stackup_editor"]

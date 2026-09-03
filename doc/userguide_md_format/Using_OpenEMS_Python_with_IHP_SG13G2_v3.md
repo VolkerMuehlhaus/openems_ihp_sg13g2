@@ -42,13 +42,21 @@ Document version: 2026-09-02 (v3)
 
 This chapter gives a brief overview of major changes since the previous edition (v2, March 2025) of this guide. For the complete, dated change log, see [`CHANGES.md`](https://github.com/VolkerMuehlhaus/openems_ihp_sg13g2/blob/main/doc/CHANGES.md) in the repository.
 
-- **`gds2openEMS` PyPI package.** The workflow code (`workflow/modules/`) is now also published as `pip install gds2openEMS`, built directly from this repository. This is now the recommended way to get the code — no more copying a `modules/` folder into every project directory. The local-copy method still works, and is still demonstrated in one dedicated example, but it's no longer the default.
-- **`settings{}` dictionary syntax.** All `workflow/run_*.py` examples now configure a model through one `settings = {}` dictionary instead of many loose top-level variables, matching the sibling `gds2palace_ihp_sg13g2` (AWS Palace/Elmer FEM) workflow's convention. The loose-variable style still works — `setupSimulation()`/`runSimulation()` accept both — and is still shown in `more_examples/local_modules_copy/run_line_viaport.py`.
-- **`postprocess_only` is gone.** `runSimulation()` already skips the FDTD solve automatically via a content hash of the model — if nothing changed since the last run, it reuses the existing result instead of re-simulating. The AppCSXCAD preview is unaffected by this check and is still shown on every run, so you always see the current model before it (re-)simulates.
-- **`shapely` is now a hard dependency.** It is used for splitting keyhole and hole polygons before CSXCAD extrusion. Layouts with cutouts no longer need a `preprocess_gds` flag at all — see "Meshing" below. `import shapely` failing now raises a clear "install it with: `pip install shapely`" message instead of a bare traceback.
-- **Port de-embedding script**, `scripts/deembed_openEMS.py` — a "quick & dirty" estimate-and-remove of each lumped port's parasitic inductance, see [Port parasitics and de-embedding](#port-parasitics-and-de-embedding).
-- **`numThreads`** to force the solver thread count instead of relying on automatic detection, and **easyMesh4openEMS** integration for geometry-based automatic mesh line placement — see [Advanced topics](#advanced-topics).
-- **Derived layers and `<Variable>` overrides** in the XML stackup format, ported from the sibling `gds2palace_ihp_sg13g2` reader to keep the two independent copies in sync — see [Overriding XML stackup `<Variable>` from the model code](#overriding-xml-stackup-variable-from-the-model-code) and [`XML_stackup_format.md`](../XML_stackup_format.md).
+- One major change is that documentation and examples now **install gds2openEMS as a module from PyPi** (pip install gds2openEMS), instead of the local copy of the modules folder used before. The old method with local copy still works, but the new method using Python module installation is more convenient.
+
+- The second major change is that examples and documentation now use the **settings[] dictionary syntax for simulation model settings**, similar to the gds2palace workflow. The previous model syntax with loose variables is still supported, so you can choose whatever suits your needs. Long term, the settings[] dictionary syntax is preferred because it allows to switch between openEMS and Palace workflows more easily.
+
+- A graphical **XML stackup editor** was added in the `stackup_editor` directory. When the gds2openEMS Python module is installed, you can call this from the commandline using `stackupEditor`, with an XML file as optional parameter. Because of this GUI-based stackup editor, the PySide6 module is now a required dependency, and installed automatically when you install the gds2openEMS module.
+
+- **Derived layers and `<Variable>` overrides** in the XML stackup format, see [Overriding XML stackup `<Variable>` from the model code](#overriding-xml-stackup-variable-from-the-model-code) and [`XML_stackup_format.md`](../XML_stackup_format.md).
+
+- The `postprocess_only` setting is no longer required.  `runSimulation()` already skips the FDTD solve automatically via a content hash of the model. If nothing changed since the last run, it reuses the existing result instead of re-simulating. 
+
+- **`shapely` is now a hard dependency.** It is used for splitting keyhole and hole polygons before CSXCAD extrusion. Layouts with cutouts no longer need a `preprocess_gds` flag at all. 
+
+- Port de-embedding script `scripts/deembed_openEMS.py` is a "quick & dirty" solution to estimate and remove lumped port's parasitic inductance, see [Port parasitics and de-embedding](#port-parasitics-and-de-embedding).
+
+- `numThreads` setting to **force the solver thread count** to a fixed value, instead of relying on automatic detection.
 
 ## About this workflow
 
