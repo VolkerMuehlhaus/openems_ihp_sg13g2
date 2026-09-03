@@ -17,14 +17,8 @@
 ########################################################################
 
 import os
-import sys
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), 'modules')))
 
-import modules.util_stackup_reader as stackup_reader
-import modules.util_gds_reader as gds_reader
-import modules.util_utilities as utilities
-import modules.util_simulation_setup as simulation_setup
-import modules.util_meshlines as util_meshlines
+from gds2openEMS import *
 
 from openEMS import openEMS
 import numpy as np
@@ -32,25 +26,29 @@ import matplotlib.pyplot as plt
 
 
 # Model comments
-# 
+#
 # Example how layout can be created from code, with or without loading other layout from GDSII file
 # See code lines with  allpolygons.add_rectangle() and allpolygons.add_polygon()
+#
+# This model uses the settings{} dictionary syntax and the gds2openEMS PyPI package
+# (pip install gds2openEMS) instead of a local copy of the modules folder - see the
+# README for the loose-variable / local-modules-copy alternative, still fully supported.
 
 
 # ======================== workflow settings ================================
 
+settings = {}
+
 # preview model/mesh only?
-# postprocess existing data without re-running simulation?
-preview_only = True
-postprocess_only = False
+settings['preview_only'] = True
 
 # ===================== input files and path settings =======================
 
 # gds_filename = "line_simple_viaport.gds"   # geometries
 XML_filename = "SG13G2_nosub.xml"               # stackup
 
-# preprocess GDSII for safe handling of cutouts/holes?
-preprocess_gds = False
+# preprocess GDSII for safe handling of cutouts/holes? (unused here, no GDSII file is loaded)
+settings['preprocess_gds'] = False
 
 # get path for this simulation file
 script_path = utilities.get_script_path(__file__)
@@ -67,24 +65,24 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 # ======================== simulation settings ================================
 
-unit   = 1e-6  # geometry is in microns
-margin = 50    # distance in microns from GDSII geometry boundary to simulation boundary 
+settings['unit']   = 1e-6  # geometry is in microns
+settings['margin'] = 50    # distance in microns from GDSII geometry boundary to simulation boundary
 
-fstart =  0e9
-fstop  = 110e9
-numfreq = 401
+settings['fstart']  = 0e9
+settings['fstop']   = 110e9
+settings['numfreq'] = 401
 
-refined_cellsize = 0.5  # mesh cell size in conductor region
+settings['refined_cellsize'] = 0.5  # mesh cell size in conductor region
 
-# choices for boundary: 
+# choices for boundary:
 # 'PEC' : perfect electric conductor (default)
 # 'PMC' : perfect magnetic conductor, useful for symmetries
 # 'MUR' : simple MUR absorbing boundary conditions
 # 'PML_8' : PML absorbing boundary conditions
-Boundaries = ['PEC', 'PEC', 'PEC', 'PEC', 'PEC', 'PEC']
+settings['Boundaries'] = ['PEC', 'PEC', 'PEC', 'PEC', 'PEC', 'PEC']
 
-cells_per_wavelength = 20   # how many mesh cells per wavelength, must be 10 or more
-energy_limit = -40          # end criteria for residual energy (dB)
+settings['cells_per_wavelength'] = 20   # how many mesh cells per wavelength, must be 10 or more
+settings['energy_limit'] = -40          # end criteria for residual energy (dB)
 
 # ports from GDSII Data, polygon geometry from specified special layer
 # note that for multiport simulation, excitations are switched on/off in simulation_setup.createSimulation below
@@ -103,7 +101,7 @@ layernumbers = metals_list.getlayernumbers()
 layernumbers.extend(simulation_ports.portlayers)
 
 # Here, we do NOT load a GDSII file, and create an empty all_polygons_list() instead
-# allpolygons = gds_reader.read_gds(gds_filename, layernumbers, purposelist=[0], metals_list=metals_list, preprocess=preprocess_gds)
+# allpolygons = gds_reader.read_gds(gds_filename, layernumbers, purposelist=[0], metals_list=metals_list, preprocess=settings['preprocess_gds'])
 allpolygons = gds_reader.all_polygons_list()
 
 # Add rectangles manually
@@ -112,56 +110,50 @@ allpolygons.add_rectangle(x1=0, y1=-1.5, x2=100, y2=1.5, layernum=metals_list.ge
 # port rectangles, mapped to via ports defined above by their layer number. Parameter is_port=True leads to mesh refinement for this polygon.
 allpolygons.add_rectangle(x1=0,  y1=-1.5, x2=1,   y2=1.5, layernum=201, is_port=True)
 allpolygons.add_rectangle(x1=99, y1=-1.5, x2=100, y2=1.5, layernum=202, is_port=True)
-# ground plane on Metal1 
+# ground plane on Metal1
 allpolygons.add_rectangle(x1=-20,  y1=-20, x2=120, y2=20, layernum=metals_list.getbylayername('Metal1').layernum)
-# test adding polygon 
+# test adding polygon
 # allpolygons.add_polygon( xy=[[-20,-20],[-20,20],[120,20],[120,-20]], layernum=metals_list.getbylayername('Metal1').layernum)
 
-
-# calculate maximum cellsize from wavelength in dielectric
-wavelength_air = 3e8/fstop / unit
-max_cellsize = (wavelength_air)/(np.sqrt(materials_list.eps_max)*cells_per_wavelength) 
+# maximum cellsize is calculated inside setupSimulation when using settings dictionary
 
 # define excitation and stop criteria and boundaries
-FDTD = openEMS(EndCriteria=np.exp(energy_limit/10 * np.log(10)))
-FDTD.SetGaussExcite( (fstart+fstop)/2, (fstop-fstart)/2 )
-FDTD.SetBoundaryCond( Boundaries )
+FDTD = openEMS(EndCriteria=np.exp(settings['energy_limit']/10 * np.log(10)))
+FDTD.SetGaussExcite( (settings['fstart']+settings['fstop'])/2, (settings['fstop']-settings['fstart'])/2 )
+FDTD.SetBoundaryCond( settings['Boundaries'] )
+
+settings['simulation_ports'] = simulation_ports
+settings['materials_list'] = materials_list
+settings['dielectrics_list'] = dielectrics_list
+settings['metals_list'] = metals_list
+settings['layernumbers'] = layernumbers
+settings['allpolygons'] = allpolygons
+settings['sim_path'] = sim_path
+settings['model_basename'] = model_basename
 
 
 ########### create model, run and post-process ###########
 
-# Create simulation for port 1 and 2 excitation, return value is data path for that excitation
-excite_ports = [1]  # list of ports that are excited for this simulation run
-FDTD = simulation_setup.setupSimulation (excite_ports, 
-                                         simulation_ports, 
-                                         FDTD, 
-                                         materials_list, 
-                                         dielectrics_list, 
-                                         metals_list, 
-                                         allpolygons, 
-                                         max_cellsize, 
-                                         refined_cellsize, 
-                                         margin, 
-                                         unit, 
-                                         xy_mesh_function=util_meshlines.create_xy_mesh_from_polygons)
-
-sub1_data_path = simulation_setup.runSimulation (excite_ports, FDTD, sim_path, model_basename, preview_only, postprocess_only)
+# Create simulation for port 1 excitation, return value is data path for that excitation
+settings['excite_portnumbers'] = [1]
+simulation_setup.setupSimulation (FDTD=FDTD, settings=settings)  # must use named parameters when using settings dict!
+sub1_data_path = simulation_setup.runSimulation (FDTD=FDTD, settings=settings)  # must use named parameters when using settings dict!
 
 
 ########## evaluation of results with composite GSG ports ###########
 
-if preview_only==False:
+if settings['preview_only']==False:
 
     # define dB function for S-parameters
     def dB(value):
-        return 20.0*np.log10(np.abs(value))        
+        return 20.0*np.log10(np.abs(value))
 
     # define phase function for S-parameters
     def phase(value):
-        return np.angle(value, deg=True) 
+        return np.angle(value, deg=True)
 
 
-    f = np.linspace(fstart,fstop,numfreq)
+    f = np.linspace(settings['fstart'],settings['fstop'],settings['numfreq'])
 
     # get results, CSX port definition is read from simulation ports object
     s11 = utilities.calculate_Sij (1, 1, f, sim_path, simulation_ports)

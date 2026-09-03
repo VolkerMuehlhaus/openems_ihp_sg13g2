@@ -17,28 +17,26 @@
 ########################################################################
 
 import os
-import sys
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), 'modules')))
-
-import modules.util_stackup_reader as stackup_reader
-import modules.util_gds_reader as gds_reader
-import modules.util_utilities as utilities
-import modules.util_simulation_setup as simulation_setup
+from gds2openEMS import *
 
 from openEMS import openEMS
 import numpy as np
 
 # Model comments
-# 
-# This is a generic model running port excitation for all ports defined below, 
+#
+# This is a generic model running port excitation for all ports defined below,
 # to get full [S] matrix data.
-# Output is stored to Touchstone S-parameter file. 
+# Output is stored to Touchstone S-parameter file.
 # No data plots are created by this script.
 #
 # This model uses an alternative syntax where are settings are stored in settings dictionary,
-# which makes it easier to implement future extensions without touching again the 
+# which makes it easier to implement future extensions without touching again the
 # simulation model code
+#
+# This model uses the gds2openEMS PyPI package (pip install gds2openEMS) instead of a local
+# copy of the modules folder - see more_examples/local_modules_copy for that alternative,
+# still fully supported.
 
 # Mesh method is set to easyMesh
 # https://github.com/MustafaAlchalabi/easyMesh4openEMS/tree/main
@@ -48,7 +46,6 @@ import numpy as np
 settings = {}
 
 settings['preview_only'] = True  # preview model/mesh only?
-settings['postprocess_only'] = False # postprocess existing data without re-running simulation?
 settings['no_gui'] = False # if set to True, there is no mesh/model preview in AppCSXCAD, and simulation starts immediately. 
 
 # ===================== input files and path settings =======================
@@ -166,9 +163,10 @@ FDTD.SetBoundaryCond( settings['Boundaries'] )
 
 ########### create model, run and post-process ###########
 
-# run all port excitations, one after another
-for port in simulation_ports.ports:
-    settings['excite_portnumbers'] = [port.portnumber]
+# run all active port excitations, one after another. Ports with voltage=0 are skipped here -
+# their S-parameters are left out of the result, see the FAQ in the user's guide.
+for excite_portnumbers in simulation_ports.all_active_excitations():
+    settings['excite_portnumbers'] = excite_portnumbers
 
     # prepare model from GDSII data
     simulation_setup.setupSimulation (FDTD=FDTD, settings=settings)  # must use named parameters when using settings dict!

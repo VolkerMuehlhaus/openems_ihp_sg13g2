@@ -12,13 +12,13 @@ A new optional numThreads parameter can be specified in simulation_setup.setupSi
 ```python
 numThreads = 8  
 (...)  
-simulation_setup.runSimulation (excite_ports, FDTD, sim_path, model_basename, preview_only, postprocess_only, numThreads=numThreads)      
+simulation_setup.runSimulation (excite_ports, FDTD, sim_path, model_basename, preview_only, numThreads=numThreads)      
 ```
 
 This parameter is optional, it defaults to automatic thread detection by openEMS, as know from previous workflow releases.  
 
 ```python
-simulation_setup.runSimulation (excite_ports, FDTD, sim_path, model_basename, preview_only, postprocess_only)    
+simulation_setup.runSimulation (excite_ports, FDTD, sim_path, model_basename, preview_only)    
 ```
 
 

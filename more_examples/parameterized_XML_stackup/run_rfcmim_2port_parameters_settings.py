@@ -22,7 +22,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..',
 from modules import *
 
 # Alternative: instead of the local "modules" folder above, you can "pip install gds2openEMS"
-# and "from gds2openEMS import *" instead - see more_examples/model_syntax_gds2openEMS for that style.
+# and "from gds2openEMS import *" instead - see workflow/run_generic_nport.py for that style,
+# and the README for how the two are independent choices.
 
 from openEMS import openEMS
 import numpy as np
@@ -30,7 +31,7 @@ import numpy as np
 # Model comments
 # This is the same model as run_rfcmim_2port_parameters.py (override of parameters defined in
 # the XML stackup file), but using the alternative "settings" dictionary syntax instead of loose
-# top-level variables - see more_examples/model_syntax_gds2openEMS for background on this style.
+# top-level variables - see workflow/run_generic_nport.py for background on this style.
 # Both scripts produce equivalent openEMS models.
 
 
@@ -38,7 +39,6 @@ import numpy as np
 settings = {}
 
 settings['preview_only'] = True  # preview model/mesh only?
-settings['postprocess_only'] = False # postprocess existing data without re-running simulation?
 settings['no_gui'] = False # if set to True, there is no mesh/model preview in AppCSXCAD, and simulation starts immediately.
 
 # ===================== input files and path settings =======================
@@ -139,9 +139,10 @@ FDTD = openEMS(EndCriteria=np.exp(settings['energy_limit']/10 * np.log(10)))
 FDTD.SetGaussExcite( (settings['fstart']+settings['fstop'])/2, (settings['fstop']-settings['fstart'])/2 )
 FDTD.SetBoundaryCond( settings['Boundaries'] )
 
-# run all port excitations, one after another
-for port in simulation_ports.ports:
-    settings['excite_portnumbers'] = [port.portnumber]
+# run all active port excitations, one after another. Ports with voltage=0 are skipped here -
+# their S-parameters are left out of the result, see the FAQ in the user's guide.
+for excite_portnumbers in simulation_ports.all_active_excitations():
+    settings['excite_portnumbers'] = excite_portnumbers
 
     # prepare model from GDSII data
     simulation_setup.setupSimulation (FDTD=FDTD, settings=settings)  # must use named parameters when using settings dict!

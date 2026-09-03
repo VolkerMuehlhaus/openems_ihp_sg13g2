@@ -12,7 +12,7 @@ Python coding style differs, to show both syntax options supported by this workf
 | File | Style |
 |---|---|
 | [`run_rfcmim_2port_parameters.py`](run_rfcmim_2port_parameters.py) | Loose top-level variables (`total_thickness = 100`), passed to `read_substrate()` and the `simulation_setup` functions individually |
-| [`run_rfcmim_2port_parameters_settings.py`](run_rfcmim_2port_parameters_settings.py) | A single `settings = {}` dictionary (`settings['variable_overrides']['total_thickness'] = 100`), passed as one object - see `more_examples/model_syntax_gds2openEMS` for background on this style |
+| [`run_rfcmim_2port_parameters_settings.py`](run_rfcmim_2port_parameters_settings.py) | A single `settings = {}` dictionary (`settings['variable_overrides']['total_thickness'] = 100`), passed as one object - see `workflow/run_generic_nport.py` for background on this style |
 
 ## See also
 

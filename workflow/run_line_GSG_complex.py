@@ -17,31 +17,28 @@
 ########################################################################
 
 import os
-import sys
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), 'modules')))
 
-import modules.util_stackup_reader as stackup_reader
-import modules.util_gds_reader as gds_reader
-import modules.util_utilities as utilities
-import modules.util_simulation_setup as simulation_setup
-import modules.util_meshlines as util_meshlines
+from gds2openEMS import *
 
 from openEMS import openEMS
 import numpy as np
 import matplotlib.pyplot as plt
 
 # Model comments
-# This model has one challenge: 
-# Ports are composite, with each 50 Ohm GSG port in the S-params created from two EM ports of 100 Ohm between signal line and each side ground 
-# Layout from GDSII requires preprocessing, see switch below
+# This model has one challenge:
+# Ports are composite, with each 50 Ohm GSG port in the S-params created from two EM ports of 100 Ohm between signal line and each side ground
 # S2P output is created from "fake" reverse path data, assuming symmetry
+#
+# This model uses the settings{} dictionary syntax and the gds2openEMS PyPI package
+# (pip install gds2openEMS) instead of a local copy of the modules folder - see the
+# README for the loose-variable / local-modules-copy alternative, still fully supported.
 
 # ======================== workflow settings ================================
 
+settings = {}
+
 # preview model/mesh only?
-# postprocess existing data without re-running simulation?
-preview_only = True
-postprocess_only = False
+settings['preview_only'] = True
 
 # ===================== input files and path settings =======================
 
@@ -49,10 +46,10 @@ gds_filename = "gsg_through_50ohm.gds"   # geometries
 XML_filename = "SG13G2.xml"               # stackup
 
 # preprocess GDSII for safe handling of cutouts/holes?
-preprocess_gds = True
+settings['preprocess_gds'] = True
 
 # merge via polygons with distance less than .. microns, set to 0 to disable via merging.
-merge_polygon_size = 0
+settings['merge_polygon_size'] = 0
 
 # get path for this simulation file
 script_path = utilities.get_script_path(__file__)
@@ -69,24 +66,24 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 # ======================== simulation settings ================================
 
-unit   = 1e-6   # geometry is in microns
-margin = 100    # distance in microns from GDSII geometry boundary to simulation boundary 
+settings['unit']   = 1e-6   # geometry is in microns
+settings['margin'] = 100    # distance in microns from GDSII geometry boundary to simulation boundary
 
-fstart = 0
-fstop  = 350e9
-numfreq = 401
+settings['fstart']  = 0
+settings['fstop']   = 350e9
+settings['numfreq'] = 401
 
-refined_cellsize = 1.5  # mesh cell size in conductor region
+settings['refined_cellsize'] = 1.5  # mesh cell size in conductor region
 
-# choices for boundary: 
+# choices for boundary:
 # 'PEC' : perfect electric conductor (default)
 # 'PMC' : perfect magnetic conductor, useful for symmetries
 # 'MUR' : simple MUR absorbing boundary conditions
 # 'PML_8' : PML absorbing boundary conditions
-Boundaries = ['PEC', 'PEC', 'PEC', 'PEC', 'PEC', 'MUR']
+settings['Boundaries'] = ['PEC', 'PEC', 'PEC', 'PEC', 'PEC', 'MUR']
 
-cells_per_wavelength = 20   # how many mesh cells per wavelength, must be 10 or more
-energy_limit = -40          # end criteria for residual energy (dB)
+settings['cells_per_wavelength'] = 20   # how many mesh cells per wavelength, must be 10 or more
+settings['energy_limit'] = -40          # end criteria for residual energy (dB)
 
 # ports from GDSII Data, polygon geometry from specified special layer
 # note that for multiport simulation, excitations are switched on/off in simulation_setup.createSimulation below
@@ -107,45 +104,39 @@ layernumbers = metals_list.getlayernumbers()
 layernumbers.extend(simulation_ports.portlayers)
 
 # read geometries from GDSII, only purpose 0
-allpolygons = gds_reader.read_gds(gds_filename, layernumbers, purposelist=[0], metals_list=metals_list, preprocess=preprocess_gds, merge_polygon_size=merge_polygon_size)
+allpolygons = gds_reader.read_gds(gds_filename, layernumbers, purposelist=[0], metals_list=metals_list, preprocess=settings['preprocess_gds'], merge_polygon_size=settings['merge_polygon_size'])
 
-
-# calculate maximum cellsize from wavelength in dielectric
-wavelength_air = 3e8/fstop / unit
-max_cellsize = (wavelength_air)/(np.sqrt(materials_list.eps_max)*cells_per_wavelength) 
+# maximum cellsize is calculated inside setupSimulation when using settings dictionary
 
 
 ########### create model, run and post-process ###########
 
-FDTD = openEMS(EndCriteria=np.exp(energy_limit/10 * np.log(10)))
-FDTD.SetGaussExcite( (fstart+fstop)/2, (fstop-fstart)/2 )
-FDTD.SetBoundaryCond( Boundaries )
+FDTD = openEMS(EndCriteria=np.exp(settings['energy_limit']/10 * np.log(10)))
+FDTD.SetGaussExcite( (settings['fstart']+settings['fstop'])/2, (settings['fstop']-settings['fstart'])/2 )
+FDTD.SetBoundaryCond( settings['Boundaries'] )
+
+settings['simulation_ports'] = simulation_ports
+settings['materials_list'] = materials_list
+settings['dielectrics_list'] = dielectrics_list
+settings['metals_list'] = metals_list
+settings['layernumbers'] = layernumbers
+settings['allpolygons'] = allpolygons
+settings['sim_path'] = sim_path
+settings['model_basename'] = model_basename
 
 # Create simulation for port 1+2 excitation
 # Excited GSG port on left side is composite from CSX ports 1+2, opposite polarity, so we excite 1+2 simultaneously
-excite_ports = [1,2]  # list of ports that are excited for this simulation run
+settings['excite_portnumbers'] = [1,2]
 
-# use polygon-based meshing
-FDTD = simulation_setup.setupSimulation (excite_ports, 
-                                         simulation_ports, 
-                                         FDTD, 
-                                         materials_list, 
-                                         dielectrics_list, 
-                                         metals_list, 
-                                         allpolygons, 
-                                         max_cellsize, 
-                                         refined_cellsize, 
-                                         margin, 
-                                         unit, 
-                                         xy_mesh_function=util_meshlines.create_xy_mesh_from_polygons)
+simulation_setup.setupSimulation (FDTD=FDTD, settings=settings)  # must use named parameters when using settings dict!
 
 # run simulation
-sub1_data_path = simulation_setup.runSimulation (excite_ports, FDTD, sim_path, model_basename, preview_only, postprocess_only)
+sub1_data_path = simulation_setup.runSimulation (FDTD=FDTD, settings=settings)  # must use named parameters when using settings dict!
 
 
 ########## evaluation of results with composite GSG ports ###########
 
-if not preview_only:
+if not settings['preview_only']:
 
     # get results, CSX port definition is read from simulation ports object
     # left side CPW port consists of CSX ports 1 and 2
@@ -156,7 +147,7 @@ if not preview_only:
     CSX_port4 = simulation_ports.get_port_by_number(4).CSXport
 
     # S-parameters must combine results from both 100 Ohm CSX ports into one 50 Ohm GSG port
-    f = np.linspace(fstart,fstop,numfreq)
+    f = np.linspace(settings['fstart'],settings['fstop'],settings['numfreq'])
     CSX_port1.CalcPort(sub1_data_path, f, 2*Z0)
     CSX_port2.CalcPort(sub1_data_path, f, 2*Z0)
     CSX_port3.CalcPort(sub1_data_path, f, 2*Z0)

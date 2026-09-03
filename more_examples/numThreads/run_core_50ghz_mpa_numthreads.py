@@ -16,11 +16,7 @@
 #
 ########################################################################
 
-import os
-import sys
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), 'modules')))
-
-from modules import *
+from gds2openEMS import *
 
 import os
 import matplotlib.pyplot as plt  # pip install matplotlib
@@ -42,9 +38,7 @@ from openEMS.physical_constants import *
 # ======================== workflow settings ================================
 
 # preview model/mesh only?
-# postprocess existing data without re-running simulation?
-preview_only = False   
-postprocess_only = False
+preview_only = False
 
 numThreads = 8 # force number of threads for openEMS solver, set to 0 to use automatic detection in openEMS
 
@@ -132,7 +126,7 @@ excite_ports_list = [[1],[2],[3],[4]]  # list of ports that are excited in the d
 for excite_ports in excite_ports_list:
     # define excitation and stop criteria and boundaries
     FDTD = simulation_setup.setupSimulation (excite_ports, simulation_ports, FDTD, materials_list, dielectrics_list, metals_list, allpolygons, max_cellsize, refined_cellsize, margin, unit, xy_mesh_function=util_meshlines.create_xy_mesh_from_polygons)
-    simulation_setup.runSimulation (excite_ports, FDTD, sim_path, model_basename, preview_only, postprocess_only, numThreads=numThreads)  # numThreads parameter is option, default is automatic detection
+    simulation_setup.runSimulation (excite_ports, FDTD, sim_path, model_basename, preview_only, numThreads=numThreads)  # numThreads parameter is option, default is automatic detection
 
 
 if preview_only==False:

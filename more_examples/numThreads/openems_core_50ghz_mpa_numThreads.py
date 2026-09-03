@@ -16,15 +16,7 @@
 #
 ########################################################################
 
-import os
-import sys
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), 'modules')))
-
-import modules.util_stackup_reader as stackup_reader
-import modules.util_gds_reader as gds_reader
-import modules.util_utilities as utilities
-import modules.util_simulation_setup as simulation_setup
-import modules.util_meshlines as util_meshlines
+from gds2openEMS import *
 
 import os
 import matplotlib.pyplot as plt  # pip install matplotlib
@@ -51,7 +43,6 @@ from openEMS.physical_constants import *
 settings = {}
 
 settings['preview_only'] = False  # @brief Enable this to preview model/mesh only, without starting simulation
-settings['postprocess_only'] = False # @brief Enable this to show existing results only, without starting simulation
 
 settings['numThreads'] = 8 #@brief Number of threads, set to 0 for automatic detection by openEMS
 

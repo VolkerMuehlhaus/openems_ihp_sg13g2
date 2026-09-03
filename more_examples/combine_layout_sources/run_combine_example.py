@@ -17,14 +17,7 @@
 ########################################################################
 
 import os
-import sys
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__),'..','..','workflow','modules')))
-
-import util_stackup_reader as stackup_reader
-import util_gds_reader as gds_reader
-import util_utilities as utilities
-import util_simulation_setup as simulation_setup
-import util_meshlines as util_meshlines
+from gds2openEMS import *
 
 from openEMS import openEMS
 import numpy as np
@@ -41,9 +34,7 @@ import matplotlib.pyplot as plt
 # ======================== workflow settings ================================
 
 # preview model/mesh only?
-# postprocess existing data without re-running simulation?
 preview_only = True
-postprocess_only = False
 
 # ===================== input files and path settings =======================
 
@@ -183,7 +174,7 @@ STL1.AddPolyhedronReader(os.path.join(os.path.dirname(__file__),'example.stl'), 
 # mesh.AddLine('z', [300.0, 305.0] )
 
 
-sub1_data_path = simulation_setup.runSimulation (excite_ports, FDTD, sim_path, model_basename, preview_only, postprocess_only)
+sub1_data_path = simulation_setup.runSimulation (excite_ports, FDTD, sim_path, model_basename, preview_only)
 
 
 ########## evaluation of results with composite GSG ports ###########

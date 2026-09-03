@@ -17,11 +17,7 @@
 ########################################################################
 
 import os
-import sys
-
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'workflow')))
-from modules import *
-
+from gds2openEMS import *
 
 from openEMS import openEMS
 import numpy as np
@@ -34,7 +30,6 @@ import matplotlib.pyplot as plt
 # ======================== workflow settings ================================
 
 preview_only = False  # preview model/mesh only?
-postprocess_only = False # postprocess existing data without re-running simulation?
 no_gui = False # if set to True, there is no mesh/model preview in AppCSXCAD, and simulation starts immediately. 
 
 
@@ -134,28 +129,28 @@ FDTD.SetGaussExcite( (fstart+fstop)/2, (fstop-fstart)/2 )
 FDTD.SetBoundaryCond( Boundaries )
 
 
-# run all port excitations, one after another
+# run all active port excitations, one after another. Ports with voltage=0 are skipped here -
+# their S-parameters are left out of the result, see the FAQ in the user's guide.
 
-for port in simulation_ports.ports:
-    simulation_setup.setupSimulation   ([port.portnumber], 
-                                        simulation_ports, 
-                                        FDTD, 
-                                        materials_list, 
-                                        dielectrics_list, 
-                                        metals_list, 
-                                        allpolygons, 
-                                        max_cellsize, 
-                                        refined_cellsize, 
-                                        margin, 
-                                        unit, 
+for excite_portnumbers in simulation_ports.all_active_excitations():
+    simulation_setup.setupSimulation   (excite_portnumbers,
+                                        simulation_ports,
+                                        FDTD,
+                                        materials_list,
+                                        dielectrics_list,
+                                        metals_list,
+                                        allpolygons,
+                                        max_cellsize,
+                                        refined_cellsize,
+                                        margin,
+                                        unit,
                                         xy_mesh_function=util_meshlines.create_xy_mesh_from_polygons)
-    
-    simulation_setup.runSimulation  ([port.portnumber], 
-                                        FDTD, 
-                                        sim_path, 
-                                        model_basename, 
-                                        preview_only, 
-                                        postprocess_only,
+
+    simulation_setup.runSimulation  (excite_portnumbers,
+                                        FDTD,
+                                        sim_path,
+                                        model_basename,
+                                        preview_only,
                                         no_gui=no_gui)
 
 
