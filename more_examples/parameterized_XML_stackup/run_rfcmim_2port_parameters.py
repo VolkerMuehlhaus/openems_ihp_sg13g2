@@ -17,11 +17,7 @@
 ########################################################################
 
 import os
-import sys
-
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'workflow')))
-from modules import *
-
+from gds2openEMS import *
 
 from openEMS import openEMS
 import numpy as np

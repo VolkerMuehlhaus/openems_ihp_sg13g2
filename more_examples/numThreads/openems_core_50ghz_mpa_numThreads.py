@@ -16,15 +16,7 @@
 #
 ########################################################################
 
-import os
-import sys
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), 'modules')))
-
-import modules.util_stackup_reader as stackup_reader
-import modules.util_gds_reader as gds_reader
-import modules.util_utilities as utilities
-import modules.util_simulation_setup as simulation_setup
-import modules.util_meshlines as util_meshlines
+from gds2openEMS import *
 
 import os
 import matplotlib.pyplot as plt  # pip install matplotlib
